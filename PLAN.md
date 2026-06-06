@@ -327,11 +327,13 @@ The app is a data-fetch + image-display tool. PWA handles this perfectly with a 
 - [ ] Point extraction (`--extract lat lon` → reflectivity value)
 - [ ] Regional subsetting with grib_copy
 
-### Phase 6: Web API + frontend
-- [ ] `server.py` — FastAPI serving `/api/radar`, `/api/products`, static files
-- [ ] `static/index.html` — product selector, map preview, time scrubber
-- [ ] `static/app.js` — fetch API calls, auto-refresh, image display
-- [ ] CORS and caching headers
+### Phase 6: Web API + frontend  ✅ DONE
+- [x] `server.py` — FastAPI serving `/api/radar`, `/api/products`, static files
+- [x] `static/index.html` — product selector, map preview, time scrubber
+- [x] `static/app.js` — fetch API calls, auto-refresh, image display (inline)
+- [x] `static/manifest.json` + `static/sw.js` — PWA-ready
+- [x] CORS and caching headers (Cache-Control, X-MRMS-Timestamp)
+- [x] Windy-style UI: full-screen map, floating controls, auto-hiding top bar, pinch-zoom
 
 ### Phase 7: PWA + Android install
 - [ ] `static/manifest.json` — app name, icons, display mode
