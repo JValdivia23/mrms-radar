@@ -300,12 +300,12 @@ The app is a data-fetch + image-display tool. PWA handles this perfectly with a 
 
 ## Milestones
 
-### Phase 1: Core library + Single-image CLI (MVP)
-- [ ] `mrms_core.py` — `fetch_radar()`, `RadarImage` dataclass, time rounding, disk cache
-- [ ] `mrms_cli.py` — click CLI with default product + location + current time
-- [ ] `--product`, `--lat`, `--lon`, `--zoom`, `--output` flags
-- [ ] `--time` flag with ISO parsing
-
+### Phase 1: Core library + Single-image CLI (MVP)  ✅ DONE
+- [x] `mrms_core.py` — `fetch_radar()`, `RadarImage` dataclass, time rounding, disk cache
+- [x] `mrms_cli.py` — click CLI with default product + location + current time
+- [x] `--product`, `--lat`, `--lon`, `--zoom`, `--output` flags
+- [x] `--time` flag with ISO parsing
+- [x] Full test suite (23 unit + 1 integration), all passing
 ### Phase 2: Product catalog
 - [ ] `mrms_core.list_products()` — fetch and parse menu config endpoint
 - [ ] `--list-products` flag (all products)
