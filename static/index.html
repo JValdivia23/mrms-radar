@@ -37,7 +37,7 @@
     position:fixed;inset:0;
     overflow:hidden;
     cursor:grab;
-    background:radial-gradient(ellipse at 40% 50%,#1a2a3a 0%,#0a1018 100%);
+    background:#0a0e14;
   }
   .map-container:active,.map-container.dragging{cursor:grabbing}
 
@@ -47,6 +47,9 @@
     will-change:transform;
     opacity:0;
     transition:opacity .25s;
+    width:920px;height:630px;
+    background:#111;
+    box-shadow:0 0 0 2px rgba(255,255,255,.05);
   }
   .map-image.loaded{opacity:1}
 
@@ -55,10 +58,20 @@
     transform:translate(-50%,-50%);
     display:flex;flex-direction:column;align-items:center;gap:12px;
     color:var(--text-muted);font-size:14px;
-    pointer-events:none;
+    pointer-events:none;z-index:10;
     transition:opacity .25s;
   }
   .map-loading.hidden{opacity:0}
+  .map-error{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    display:none;flex-direction:column;align-items:center;gap:12px;
+    color:var(--danger);font-size:14px;text-align:center;
+    z-index:10;
+    background:rgba(0,0,0,.7);padding:24px 32px;border-radius:12px;
+    max-width:300px;
+  }
+  .map-error.show{display:flex}
   .spinner{
     width:28px;height:28px;
     border:3px solid rgba(255,255,255,.1);
@@ -282,10 +295,17 @@
 
 <!-- Map -->
 <div class="map-container" id="mapContainer">
-  <img class="map-image" id="mapImage" alt="MRMS Radar" draggable="false">
+  <img class="map-image" id="mapImage" alt="MRMS Radar" draggable="false"
+       onerror="document.getElementById('mapLoading').classList.add('hidden');
+                document.getElementById('mapError').classList.add('show');">
   <div class="map-loading" id="mapLoading">
     <div class="spinner"></div>
     <span>Loading radar...</span>
+  </div>
+  <div class="map-error" id="mapError">
+    <span style="font-size:40px">⚠</span>
+    <span>Failed to load radar image</span>
+    <span style="font-size:11px;opacity:.7">Check that the server is running</span>
   </div>
 </div>
 
