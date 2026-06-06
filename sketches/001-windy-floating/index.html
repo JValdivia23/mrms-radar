@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MRMS Radar — Windy-style</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --panel-bg: rgba(20, 22, 28, 0.92);
+    --panel-border: rgba(255,255,255,0.08);
+    --text: #e8eaed;
+    --text-muted: #9aa0a6;
+    --accent: #4da6ff;
+    --danger: #ff6b6b;
+    --radius: 12px;
+    --blur: 16px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0d1117;
+    color: var(--text);
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── Map container (full screen) ── */
+  .map-container {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .map-container:active { cursor: grabbing; }
+  .map-container.dragging { cursor: grabbing; }
+
+  .map-image {
+    position: absolute;
+    transform-origin: 0 0;
+    will-change: transform;
+    /* Placeholder gradient mimicking radar data */
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(0,200,0,0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 45% 35%, rgba(255,200,0,0.2) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 38%, rgba(255,50,0,0.25) 0%, transparent 30%),
+      radial-gradient(ellipse at 55% 42%, rgba(200,0,0,0.15) 0%, transparent 35%),
+      linear-gradient(180deg, #0a1628 0%, #0d1f3c 40%, #162a1a 70%, #1a2a15 100%);
+    width: 920px;
+    height: 630px;
+    image-rendering: auto;
+  }
+
+  /* Dummy state borders drawn with CSS (replaced by real PNG in production) */
+  .map-image::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 2px;
+  }
+
+  /* ── Floating panels (glass morphism) ── */
+  .floating-panel {
+    position: fixed;
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+
+  /* ── Top bar (auto-hiding) ── */
+  .top-bar {
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .top-bar.hidden {
+    opacity: 0;
+    transform: translateY(-100%);
+    pointer-events: none;
+  }
+
+  .top-bar-left, .top-bar-right { display: flex; align-items: center; gap: 0; }
+
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.08); }
+  .icon-btn:active { background: rgba(255,255,255,0.14); }
+
+  .brand {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text);
+    margin-left: 4px;
+  }
+  .brand span { color: var(--accent); }
+
+  .time-badge {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  /* ── Hamburger side panel ── */
+  .side-panel {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: min(320px, 85vw);
+    background: var(--panel-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--panel-border);
+    z-index: 200;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .side-panel.open { transform: translateX(0); }
+
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-header h2 { font-size: 18px; font-weight: 600; }
+  .panel-section h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin-bottom: 8px;
+  }
+
+  select, input[type="range"] {
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select { cursor: pointer; }
+  select option { background: #1a1d24; color: var(--text); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    height: 4px;
+    padding: 0;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    margin: 8px 0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0;
+  }
+  .toggle {
+    width: 44px; height: 24px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* ── Overlay backdrop ── */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 150;
+    background: rgba(0,0,0,0.4);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .backdrop.visible { opacity: 1; pointer-events: auto; }
+
+  /* ── Bottom time scrubber ── */
+  .time-bar {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .time-nav {
+    width: 32px; height: 32px;
+    border-radius: 50%; border: none;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .time-nav:hover { background: rgba(255,255,255,0.12); }
+
+  .time-labels {
+    display: flex; align-items: center; gap: 20px;
+    font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  .time-current {
+    font-weight: 600; color: var(--text); font-size: 15px;
+  }
+  .time-live {
+    color: var(--danger); font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ── Zoom indicator ── */
+  .zoom-indicator {
+    position: fixed;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .zoom-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Mobile tweaks ── */
+  @media (max-width: 640px) {
+    .time-bar {
+      padding: 8px 12px; gap: 6px;
+    }
+    .time-labels { gap: 10px; }
+    .time-current { font-size: 13px; }
+    .brand { display: none; }
+    .side-panel { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Map -->
+<div class="map-container" id="mapContainer">
+  <div class="map-image" id="mapImage"></div>
+</div>
+
+<!-- Backdrop for side panel -->
+<div class="backdrop" id="backdrop" onclick="closePanel()"></div>
+
+<!-- Side panel -->
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <h2>MRMS <span style="color:var(--accent)">Radar</span></h2>
+    <button class="icon-btn" onclick="closePanel()">✕</button>
+  </div>
+
+  <div class="panel-section">
+    <h3>Product</h3>
+    <select id="productSelect">
+      <option value="M3DL13">3D Reflectivity — 4.0 km</option>
+      <option value="M3DL7">3D Reflectivity — 2.0 km</option>
+      <option value="M3DL1">3D Reflectivity — 0.5 km</option>
+      <option value="BREF">Base Reflectivity</option>
+      <option value="CREF">Composite Reflectivity</option>
+      <option value="SHSR">Seamless Hybrid Scan</option>
+      <option value="RALA">Refl at Lowest Altitude</option>
+    </select>
+  </div>
+
+  <div class="panel-section">
+    <h3>Zoom Level</h3>
+    <input type="range" min="3" max="12" value="7" id="zoomSlider">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)">
+      <span>Continent</span><span>State</span><span>City</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Overlays</h3>
+    <div class="toggle-row">
+      <span>State Borders</span>
+      <div class="toggle on" id="toggleBorders" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>County Lines</span>
+      <div class="toggle" id="toggleCounties" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>Highways</span>
+      <div class="toggle" id="toggleHighways" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>Auto-Refresh (2 min)</span>
+      <div class="toggle on" id="toggleRefresh" onclick="this.classList.toggle('on')"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div class="floating-panel top-bar" id="topBar">
+  <div class="top-bar-left">
+    <button class="icon-btn" onclick="openPanel()">☰</button>
+    <span class="brand">MRMS <span>Radar</span></span>
+  </div>
+  <div class="top-bar-right">
+    <span class="time-badge" id="headerTime">16:30 UTC</span>
+    <button class="icon-btn" onclick="resetView()" title="Reset view">⌂</button>
+  </div>
+</div>
+
+<!-- Zoom controls -->
+<div class="zoom-indicator">
+  <button class="zoom-btn" onclick="zoomIn()">+</button>
+  <button class="zoom-btn" onclick="zoomOut()">−</button>
+</div>
+
+<!-- Bottom time bar -->
+<div class="time-bar">
+  <button class="time-nav" onclick="stepTime(-4)">◀◀</button>
+  <button class="time-nav" onclick="stepTime(-1)">◀</button>
+  <div class="time-labels">
+    <span class="time-current" id="currentTime">16:30</span>
+    <span class="time-live" id="liveIndicator">● LIVE</span>
+  </div>
+  <button class="time-nav" onclick="stepTime(1)">▶</button>
+  <button class="time-nav" onclick="goLive()" style="width:auto;padding:0 10px;border-radius:16px;font-size:11px;font-weight:600">NOW</button>
+</div>
+
+<script>
+  // ── State ──
+  let zoom = 1.5;
+  let offsetX = 0, offsetY = 0;
+  let isDragging = false;
+  let dragStartX, dragStartY, startOffsetX, startOffsetY;
+  let lastDist = 0;
+  let hideTimer;
+
+  const mapContainer = document.getElementById('mapContainer');
+  const mapImage = document.getElementById('mapImage');
+  const topBar = document.getElementById('topBar');
+  const sidePanel = document.getElementById('sidePanel');
+  const backdrop = document.getElementById('backdrop');
+
+  // ── Transform application ──
+  function applyTransform() {
+    mapImage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+  }
+
+  function centerMap() {
+    const cw = mapContainer.clientWidth;
+    const ch = mapContainer.clientHeight;
+    offsetX = (cw - 920 * zoom) / 2;
+    offsetY = (ch - 630 * zoom) / 2;
+    applyTransform();
+  }
+
+  // ── Mouse / touch pan ──
+  function getEventPos(e) {
+    if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function onDragStart(e) {
+    if (e.target.closest('button, select, input, .floating-panel, .side-panel, .time-bar, .zoom-indicator, .backdrop')) return;
+    e.preventDefault();
+    isDragging = true;
+    mapContainer.classList.add('dragging');
+    const pos = e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+    dragStartX = pos.x; dragStartY = pos.y;
+    startOffsetX = offsetX; startOffsetY = offsetY;
+
+    if (e.touches && e.touches.length === 2) {
+      lastDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }
+
+  function onDragMove(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    // Pinch zoom
+    if (e.touches && e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (lastDist > 0) {
+        const scale = dist / lastDist;
+        const newZoom = Math.max(0.5, Math.min(5, zoom * scale));
+        // Zoom toward midpoint
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        offsetX = mx - (mx - offsetX) * (newZoom / zoom);
+        offsetY = my - (my - offsetY) * (newZoom / zoom);
+        zoom = newZoom;
+      }
+      lastDist = dist;
+      applyTransform();
+      return;
+    }
+
+    const pos = getEventPos(e);
+    offsetX = startOffsetX + (pos.x - dragStartX);
+    offsetY = startOffsetY + (pos.y - dragStartY);
+    applyTransform();
+    showTopBar();
+  }
+
+  function onDragEnd() {
+    isDragging = false;
+    mapContainer.classList.remove('dragging');
+    lastDist = 0;
+    resetHideTimer();
+  }
+
+  mapContainer.addEventListener('mousedown', onDragStart);
+  mapContainer.addEventListener('mousemove', onDragMove);
+  mapContainer.addEventListener('mouseup', onDragEnd);
+  mapContainer.addEventListener('mouseleave', onDragEnd);
+  mapContainer.addEventListener('touchstart', onDragStart, { passive: false });
+  mapContainer.addEventListener('touchmove', onDragMove, { passive: false });
+  mapContainer.addEventListener('touchend', onDragEnd);
+
+  // Prevent double-tap zoom on the map itself
+  mapContainer.addEventListener('dblclick', e => e.preventDefault());
+
+  // ── Zoom buttons ──
+  function zoomIn() {
+    const cx = mapContainer.clientWidth / 2;
+    const cy = mapContainer.clientHeight / 2;
+    const newZoom = Math.min(5, zoom * 1.3);
+    offsetX = cx - (cx - offsetX) * (newZoom / zoom);
+    offsetY = cy - (cy - offsetY) * (newZoom / zoom);
+    zoom = newZoom;
+    applyTransform();
+  }
+
+  function zoomOut() {
+    const cx = mapContainer.clientWidth / 2;
+    const cy = mapContainer.clientHeight / 2;
+    const newZoom = Math.max(0.5, zoom / 1.3);
+    offsetX = cx - (cx - offsetX) * (newZoom / zoom);
+    offsetY = cy - (cy - offsetY) * (newZoom / zoom);
+    zoom = newZoom;
+    applyTransform();
+  }
+
+  // ── Side panel ──
+  function openPanel() { sidePanel.classList.add('open'); backdrop.classList.add('visible'); }
+  function closePanel() { sidePanel.classList.remove('open'); backdrop.classList.remove('visible'); }
+  window.openPanel = openPanel;
+  window.closePanel = closePanel;
+
+  // ── Top bar auto-hide ──
+  function showTopBar() { topBar.classList.remove('hidden'); resetHideTimer(); }
+  function hideTopBar() { if (!sidePanel.classList.contains('open')) topBar.classList.add('hidden'); }
+  function resetHideTimer() { clearTimeout(hideTimer); hideTimer = setTimeout(hideTopBar, 4000); }
+
+  // ── Time controls (placeholder) ──
+  let currentMinute = 30;
+  function stepTime(mins) {
+    currentMinute = Math.max(0, Math.min(58, currentMinute + mins * 2));
+    const h = 16 + Math.floor(currentMinute / 60);
+    const m = currentMinute % 60;
+    const ts = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    document.getElementById('currentTime').textContent = ts;
+    document.getElementById('headerTime').textContent = ts + ' UTC';
+    document.getElementById('liveIndicator').style.display = 'none';
+  }
+  function goLive() {
+    currentMinute = 30;
+    document.getElementById('currentTime').textContent = '16:30';
+    document.getElementById('headerTime').textContent = '16:30 UTC';
+    document.getElementById('liveIndicator').style.display = 'inline';
+  }
+  function resetView() { centerMap(); showTopBar(); }
+  window.stepTime = stepTime;
+  window.goLive = goLive;
+  window.resetView = resetView;
+  window.zoomIn = zoomIn;
+  window.zoomOut = zoomOut;
+
+  // ── Init ──
+  centerMap();
+  resetHideTimer();
+  window.addEventListener('resize', centerMap);
+
+  // Dismiss side panel with Escape
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+</script>
+</body>
+</html>

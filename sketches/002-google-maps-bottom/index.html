@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MRMS Radar — Google Maps-style</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --surface: #202124;
+    --surface-2: #303134;
+    --border: #3c4043;
+    --text: #e8eaed;
+    --text-muted: #9aa0a6;
+    --accent: #8ab4f8;
+    --radius: 8px;
+  }
+
+  body {
+    font-family: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #000;
+    color: var(--text);
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── Map container ── */
+  .map-container {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .map-container:active, .map-container.dragging { cursor: grabbing; }
+
+  .map-image {
+    position: absolute;
+    transform-origin: 0 0;
+    will-change: transform;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(0,200,0,0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 45% 35%, rgba(255,200,0,0.2) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 38%, rgba(255,50,0,0.25) 0%, transparent 30%),
+      radial-gradient(ellipse at 55% 42%, rgba(200,0,0,0.15) 0%, transparent 35%),
+      linear-gradient(180deg, #0a1628 0%, #0d1f3c 40%, #162a1a 70%, #1a2a15 100%);
+    width: 920px;
+    height: 630px;
+  }
+
+  /* ── Search bar (top) ── */
+  .search-bar {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px; right: 12px;
+    z-index: 100;
+    display: flex; gap: 8px;
+  }
+  .search-input-wrap {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    display: flex; align-items: center;
+    padding: 0 16px;
+    height: 48px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .search-input-wrap:focus-within {
+    background: var(--surface-2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .search-icon {
+    color: var(--text-muted); font-size: 18px; margin-right: 10px; flex-shrink: 0;
+  }
+  .search-input {
+    flex: 1; background: transparent; border: none; color: var(--text);
+    font-size: 15px; outline: none; min-width: 0;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .avatar-btn {
+    width: 48px; height: 48px;
+    border-radius: 50%; border: none;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── Bottom sheet ── */
+  .bottom-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.5);
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 55vh;
+    display: flex; flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-sheet.collapsed { transform: translateY(calc(100% - 80px)); }
+
+  .sheet-handle {
+    width: 32px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px auto 8px;
+    cursor: grab;
+  }
+
+  .sheet-content {
+    padding: 0 16px 16px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .sheet-section h4 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin-bottom: 8px;
+  }
+
+  /* ── Product chips ── */
+  .chip-row {
+    display: flex; gap: 8px; overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .chip.active {
+    background: rgba(138,180,248,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Time scrubber ── */
+  .time-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .time-nav {
+    width: 36px; height: 36px;
+    border-radius: 50%; border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .time-slider-wrap {
+    flex: 1;
+  }
+  .time-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    margin: 4px 0;
+  }
+  .time-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  .time-labels {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .time-current {
+    font-size: 28px; font-weight: 400;
+    letter-spacing: -0.5px;
+  }
+  .time-live-badge {
+    font-size: 11px; font-weight: 700; color: #f28b82;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-left: 8px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
+  }
+
+  /* ── Overlay panel (slides up from bottom sheet) ── */
+  .overlay-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface-2);
+    border-radius: 16px 16px 0 0;
+    z-index: 300;
+    padding: 20px 16px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .overlay-panel.open { transform: translateY(0); }
+  .overlay-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .overlay-header h3 { font-size: 18px; font-weight: 500; }
+
+  .overlay-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-switch {
+    width: 44px; height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-switch.on { background: var(--accent); }
+  .toggle-switch::after {
+    content: "";
+    position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s;
+  }
+  .toggle-switch.on::after { transform: translateX(20px); }
+
+  .overlay-backdrop {
+    position: fixed; inset: 0; z-index: 250;
+    background: rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .overlay-backdrop.visible { opacity: 1; pointer-events: auto; }
+
+  /* ── Desktop adjustments ── */
+  @media (min-width: 768px) {
+    .bottom-sheet {
+      left: 50%; right: auto;
+      width: 420px;
+      transform: translateX(-50%);
+    }
+    .bottom-sheet.collapsed {
+      transform: translateX(-50%) translateY(calc(100% - 80px));
+    }
+    .search-bar {
+      left: 50%; right: auto;
+      width: 540px;
+      transform: translateX(-50%);
+    }
+    .search-input-wrap { height: 52px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Map -->
+<div class="map-container" id="mapContainer">
+  <div class="map-image" id="mapImage"></div>
+</div>
+
+<!-- Search bar -->
+<div class="search-bar">
+  <div class="search-input-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="search-input" type="text" placeholder="Search location or use GPS" id="searchInput">
+  </div>
+  <button class="avatar-btn" onclick="toggleOverlay()">☰</button>
+</div>
+
+<!-- Bottom Sheet -->
+<div class="bottom-sheet collapsed" id="bottomSheet">
+  <div class="sheet-handle" id="sheetHandle"></div>
+  <div class="sheet-content">
+    <!-- Product chips -->
+    <div class="sheet-section">
+      <h4>Radar Product</h4>
+      <div class="chip-row" id="chipRow">
+        <div class="chip active" data-product="M3DL13">Refl 4.0km</div>
+        <div class="chip" data-product="M3DL7">Refl 2.0km</div>
+        <div class="chip" data-product="M3DL1">Refl 0.5km</div>
+        <div class="chip" data-product="BREF">Base Refl</div>
+        <div class="chip" data-product="CREF">Composite</div>
+        <div class="chip" data-product="SHSR">Hyb Scan</div>
+        <div class="chip" data-product="RALA">Low Alt</div>
+      </div>
+    </div>
+
+    <!-- Time -->
+    <div class="sheet-section">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="time-current" id="timeDisplay">16:30</span>
+        <span class="time-live-badge" id="liveBadge">● LIVE</span>
+      </div>
+      <div class="time-row" style="margin-top:8px">
+        <button class="time-nav" onclick="stepTime(-4)">◀◀</button>
+        <button class="time-nav" onclick="stepTime(-1)">◀</button>
+        <div class="time-slider-wrap">
+          <input type="range" min="0" max="48" value="24" class="time-slider" id="timeSlider">
+          <div class="time-labels">
+            <span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span>
+          </div>
+        </div>
+        <button class="time-nav" onclick="stepTime(1)">▶</button>
+        <button class="time-nav" onclick="stepTime(4)">▶▶</button>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="sheet-section">
+      <h4>Quick Actions</h4>
+      <div class="chip-row">
+        <div class="chip" onclick="goLive()">● Go Live</div>
+        <div class="chip" onclick="resetView()">⌂ Reset View</div>
+        <div class="chip" onclick="toggleOverlay()">⚙ Overlays</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay panel -->
+<div class="overlay-backdrop" id="overlayBackdrop" onclick="toggleOverlay()"></div>
+<div class="overlay-panel" id="overlayPanel">
+  <div class="overlay-header">
+    <h3>Map Overlays</h3>
+    <button class="avatar-btn" style="width:36px;height:36px;font-size:16px;box-shadow:none" onclick="toggleOverlay()">✕</button>
+  </div>
+  <div class="overlay-toggle">
+    <span>State Borders</span>
+    <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="overlay-toggle">
+    <span>County Lines</span>
+    <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="overlay-toggle">
+    <span>Highways</span>
+    <div class="toggle-switch" onclick="this.classList.toggle('on')"></div>
+  </div>
+  <div class="overlay-toggle">
+    <span>Auto-Refresh (2 min)</span>
+    <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+  </div>
+</div>
+
+<script>
+  // ── Map state ──
+  let zoom = 1.5;
+  let offsetX = 0, offsetY = 0;
+  let isDragging = false;
+  let dragStartX, dragStartY, startOffsetX, startOffsetY;
+  let lastDist = 0;
+
+  const mapContainer = document.getElementById('mapContainer');
+  const mapImage = document.getElementById('mapImage');
+  const bottomSheet = document.getElementById('bottomSheet');
+  const overlayPanel = document.getElementById('overlayPanel');
+  const overlayBackdrop = document.getElementById('overlayBackdrop');
+  const sheetHandle = document.getElementById('sheetHandle');
+
+  function applyTransform() {
+    mapImage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+  }
+
+  function centerMap() {
+    const cw = mapContainer.clientWidth;
+    const ch = mapContainer.clientHeight;
+    offsetX = (cw - 920 * zoom) / 2;
+    offsetY = (ch - 630 * zoom) / 2;
+    applyTransform();
+  }
+
+  // ── Pan / pinch ──
+  function onDragStart(e) {
+    if (e.target.closest('button, input, .chip, .bottom-sheet, .search-bar, .overlay-panel, .overlay-backdrop, .sheet-handle, .toggle-switch')) return;
+    e.preventDefault();
+    isDragging = true;
+    mapContainer.classList.add('dragging');
+    const pos = e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+    dragStartX = pos.x; dragStartY = pos.y;
+    startOffsetX = offsetX; startOffsetY = offsetY;
+
+    if (e.touches && e.touches.length === 2) {
+      lastDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }
+  }
+
+  function onDragMove(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    if (e.touches && e.touches.length === 2) {
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if (lastDist > 0) {
+        const scale = dist / lastDist;
+        const nz = Math.max(0.5, Math.min(5, zoom * scale));
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        offsetX = mx - (mx - offsetX) * (nz / zoom);
+        offsetY = my - (my - offsetY) * (nz / zoom);
+        zoom = nz;
+      }
+      lastDist = dist;
+      applyTransform();
+      return;
+    }
+    const pos = e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+    offsetX = startOffsetX + (pos.x - dragStartX);
+    offsetY = startOffsetY + (pos.y - dragStartY);
+    applyTransform();
+  }
+
+  function onDragEnd() {
+    isDragging = false;
+    mapContainer.classList.remove('dragging');
+    lastDist = 0;
+  }
+
+  mapContainer.addEventListener('mousedown', onDragStart);
+  mapContainer.addEventListener('mousemove', onDragMove);
+  mapContainer.addEventListener('mouseup', onDragEnd);
+  mapContainer.addEventListener('mouseleave', onDragEnd);
+  mapContainer.addEventListener('touchstart', onDragStart, { passive: false });
+  mapContainer.addEventListener('touchmove', onDragMove, { passive: false });
+  mapContainer.addEventListener('touchend', onDragEnd);
+  mapContainer.addEventListener('dblclick', e => e.preventDefault());
+
+  // ── Bottom sheet drag ──
+  let sheetStartY, sheetDragging = false;
+  sheetHandle.addEventListener('mousedown', e => { sheetDragging = true; sheetStartY = e.clientY; e.preventDefault(); });
+  sheetHandle.addEventListener('touchstart', e => { sheetDragging = true; sheetStartY = e.touches[0].clientY; }, { passive: true });
+
+  document.addEventListener('mousemove', e => {
+    if (!sheetDragging) return;
+    const dy = sheetStartY - e.clientY;
+    if (Math.abs(dy) > 20) {
+      bottomSheet.classList.toggle('collapsed', dy < 0);
+      sheetDragging = false;
+    }
+  });
+  document.addEventListener('touchmove', e => {
+    if (!sheetDragging) return;
+    const dy = sheetStartY - e.touches[0].clientY;
+    if (Math.abs(dy) > 20) {
+      bottomSheet.classList.toggle('collapsed', dy < 0);
+      sheetDragging = false;
+    }
+  }, { passive: true });
+  document.addEventListener('mouseup', () => sheetDragging = false);
+  document.addEventListener('touchend', () => sheetDragging = false);
+
+  // Tap sheet handle to toggle
+  sheetHandle.addEventListener('click', () => bottomSheet.classList.toggle('collapsed'));
+
+  // ── Product chips ──
+  document.getElementById('chipRow').addEventListener('click', e => {
+    if (!e.target.classList.contains('chip')) return;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    e.target.classList.add('active');
+  });
+
+  // ── Overlay panel ──
+  function toggleOverlay() {
+    const open = !overlayPanel.classList.contains('open');
+    overlayPanel.classList.toggle('open');
+    overlayBackdrop.classList.toggle('visible');
+  }
+  window.toggleOverlay = toggleOverlay;
+
+  // ── Time ──
+  let timeSlot = 24; // index on slider
+  function stepTime(steps) {
+    timeSlot = Math.max(0, Math.min(48, timeSlot + steps));
+    document.getElementById('timeSlider').value = timeSlot;
+    const mins = timeSlot * 2;
+    const h = 12 + Math.floor(mins / 60);
+    const m = mins % 60;
+    document.getElementById('timeDisplay').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    document.getElementById('liveBadge').style.display = 'none';
+  }
+  function goLive() {
+    timeSlot = 24;
+    document.getElementById('timeSlider').value = 24;
+    document.getElementById('timeDisplay').textContent = '16:30';
+    document.getElementById('liveBadge').style.display = 'inline';
+  }
+  document.getElementById('timeSlider').addEventListener('input', e => {
+    timeSlot = parseInt(e.target.value);
+    const mins = timeSlot * 2;
+    const h = 12 + Math.floor(mins / 60);
+    const m = mins % 60;
+    document.getElementById('timeDisplay').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    document.getElementById('liveBadge').style.display = 'none';
+  });
+
+  window.stepTime = stepTime;
+  window.goLive = goLive;
+  window.resetView = () => { centerMap(); };
+
+  // ── Init ──
+  centerMap();
+  window.addEventListener('resize', centerMap);
+</script>
+</body>
+</html>

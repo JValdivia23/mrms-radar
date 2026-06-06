@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/static/manifest.json">
+<title>MRMS Radar</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --panel-bg:rgba(18,20,26,.94);
+    --panel-border:rgba(255,255,255,.08);
+    --text:#e8eaed;
+    --text-muted:#8b9098;
+    --accent:#5b9ef5;
+    --danger:#f0625c;
+    --radius:14px;
+    --blur:18px;
+  }
+
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0d1117;
+    color:var(--text);
+    overflow:hidden;
+    height:100dvh;width:100vw;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;-webkit-user-select:none;
+  }
+
+  /* ── Map ── */
+  .map-container{
+    position:fixed;inset:0;
+    overflow:hidden;
+    cursor:grab;
+    background:radial-gradient(ellipse at 40% 50%,#1a2a3a 0%,#0a1018 100%);
+  }
+  .map-container:active,.map-container.dragging{cursor:grabbing}
+
+  .map-image{
+    position:absolute;
+    transform-origin:0 0;
+    will-change:transform;
+    opacity:0;
+    transition:opacity .25s;
+  }
+  .map-image.loaded{opacity:1}
+
+  .map-loading{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+    color:var(--text-muted);font-size:14px;
+    pointer-events:none;
+    transition:opacity .25s;
+  }
+  .map-loading.hidden{opacity:0}
+  .spinner{
+    width:28px;height:28px;
+    border:3px solid rgba(255,255,255,.1);
+    border-top-color:var(--accent);
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Floating panels ── */
+  .floating{
+    position:fixed;
+    background:var(--panel-bg);
+    backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    z-index:100;
+    transition:opacity .3s,transform .3s;
+  }
+
+  /* ── Top bar ── */
+  .top-bar{
+    top:max(12px,env(safe-area-inset-top));
+    left:12px;right:12px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 12px;
+    opacity:1;transform:translateY(0);
+  }
+  .top-bar.hidden{opacity:0;transform:translateY(-120%);pointer-events:none}
+
+  .top-left,.top-right{display:flex;align-items:center;gap:4px}
+  .icon-btn{
+    width:38px;height:38px;border-radius:50%;border:none;
+    background:transparent;color:var(--text);font-size:18px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background .15s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.06)}
+  .icon-btn:active{background:rgba(255,255,255,.12)}
+
+  .brand{font-size:14px;font-weight:600;letter-spacing:.4px}
+  .brand span{color:var(--accent)}
+
+  .time-pill{
+    font-size:12px;color:var(--text-muted);
+    padding:4px 12px;background:rgba(255,255,255,.05);
+    border-radius:20px;white-space:nowrap;font-variant-numeric:tabular-nums;
+  }
+
+  /* ── Side panel ── */
+  .side-panel{
+    position:fixed;top:0;left:0;bottom:0;
+    width:min(340px,88vw);
+    background:rgba(14,16,22,.96);
+    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-right:1px solid var(--panel-border);
+    z-index:200;
+    padding:max(18px,env(safe-area-inset-top)) 18px 18px;
+    transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:22px;
+  }
+  .side-panel.open{transform:translateX(0)}
+
+  .panel-header{display:flex;align-items:center;justify-content:space-between}
+  .panel-header h2{font-size:18px;font-weight:600}
+
+  .section-label{
+    font-size:10px;text-transform:uppercase;letter-spacing:1.2px;
+    color:var(--text-muted);margin-bottom:8px;
+  }
+
+  select,input[type=range]{
+    width:100%;background:rgba(255,255,255,.05);
+    border:1px solid var(--panel-border);border-radius:10px;
+    color:var(--text);padding:10px 12px;font-size:14px;outline:none;
+    -webkit-appearance:none;appearance:none;
+  }
+  select{cursor:pointer}
+  select option{background:#181a22;color:var(--text)}
+
+  input[type=range]{
+    -webkit-appearance:none;height:4px;padding:0;
+    background:rgba(255,255,255,.1);border:none;margin:8px 0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:22px;height:22px;
+    border-radius:50%;background:var(--accent);cursor:pointer;
+    box-shadow:0 0 12px rgba(91,158,245,.4);
+  }
+
+  .toggle-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 0;font-size:14px;
+    border-bottom:1px solid rgba(255,255,255,.04);
+  }
+  .toggle{
+    width:44px;height:24px;background:rgba(255,255,255,.1);
+    border-radius:12px;position:relative;cursor:pointer;
+    transition:background .2s;flex-shrink:0;
+  }
+  .toggle.on{background:var(--accent)}
+  .toggle::after{
+    content:"";position:absolute;top:2px;left:2px;
+    width:20px;height:20px;border-radius:50%;
+    background:#fff;transition:transform .2s;
+  }
+  .toggle.on::after{transform:translateX(20px)}
+
+  .backdrop{
+    position:fixed;inset:0;z-index:150;
+    background:rgba(0,0,0,.45);
+    opacity:0;pointer-events:none;transition:opacity .28s;
+  }
+  .backdrop.show{opacity:1;pointer-events:auto}
+
+  /* ── Product chips ── */
+  .chip-row{
+    display:flex;gap:6px;overflow-x:auto;
+    padding-bottom:4px;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .chip-row::-webkit-scrollbar{display:none}
+  .chip{
+    flex-shrink:0;padding:8px 16px;border-radius:20px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);
+    color:var(--text-muted);font-size:12px;cursor:pointer;
+    transition:background .15s,border-color .15s,color .15s;
+    white-space:nowrap;
+  }
+  .chip.active{
+    background:rgba(91,158,245,.14);
+    border-color:rgba(91,158,245,.3);
+    color:var(--accent);
+  }
+
+  /* ── Bottom bar ── */
+  .bottom-bar{
+    bottom:max(16px,env(safe-area-inset-bottom));
+    left:50%;transform:translateX(-50%);
+    padding:12px 18px;
+    display:flex;flex-direction:column;gap:10px;
+    min-width:min(420px,92vw);
+  }
+
+  .time-controls{
+    display:flex;align-items:center;gap:10px;
+  }
+  .time-nav{
+    width:34px;height:34px;border-radius:50%;border:1px solid var(--panel-border);
+    background:rgba(255,255,255,.05);color:var(--text);
+    font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    transition:background .15s;
+  }
+  .time-nav:hover{background:rgba(255,255,255,.1)}
+  .time-nav.now-btn{
+    width:auto;padding:0 12px;border-radius:16px;
+    font-size:11px;font-weight:700;letter-spacing:.5px;
+  }
+
+  .time-slider-wrap{flex:1;min-width:0}
+  .time-labels{
+    display:flex;justify-content:space-between;
+    font-size:10px;color:var(--text-muted);margin-top:2px;
+  }
+
+  .live-dot{
+    display:inline-block;width:7px;height:7px;
+    background:var(--danger);border-radius:50%;
+    animation:pulse 2s ease-in-out infinite;
+    vertical-align:middle;margin-right:2px;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .time-display{
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    font-size:28px;font-weight:300;letter-spacing:-.5px;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ── Zoom buttons (desktop right) ── */
+  .zoom-stack{
+    position:fixed;right:12px;top:50%;transform:translateY(-50%);
+    z-index:100;display:flex;flex-direction:column;gap:4px;
+  }
+  .zoom-btn{
+    width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--panel-border);
+    background:var(--panel-bg);backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    color:var(--text);font-size:18px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* ── Location search bar (hidden by default, shown on desktop) ── */
+  .loc-pill{
+    position:fixed;bottom:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:90;padding:6px 14px;background:var(--panel-bg);
+    border-radius:20px;font-size:12px;color:var(--text-muted);
+    pointer-events:none;opacity:0;transition:opacity .3s;
+    white-space:nowrap;
+  }
+  .loc-pill.visible{opacity:1}
+
+  /* ── Responsive ── */
+  @media(max-width:640px){
+    .brand{display:none}
+    .bottom-bar{min-width:auto;left:12px;right:12px;transform:none;padding:10px 14px}
+    .time-display{font-size:22px}
+    .side-panel{width:100vw}
+    .zoom-stack{right:6px;gap:2px}
+    .zoom-btn{width:30px;height:30px;font-size:16px}
+    .chip{font-size:11px;padding:6px 12px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Map -->
+<div class="map-container" id="mapContainer">
+  <img class="map-image" id="mapImage" alt="MRMS Radar" draggable="false">
+  <div class="map-loading" id="mapLoading">
+    <div class="spinner"></div>
+    <span>Loading radar...</span>
+  </div>
+</div>
+
+<!-- Backdrop -->
+<div class="backdrop" id="backdrop" onclick="closePanel()"></div>
+
+<!-- Side panel -->
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <h2>MRMS <span style="color:var(--accent)">Radar</span></h2>
+    <button class="icon-btn" onclick="closePanel()">✕</button>
+  </div>
+
+  <div>
+    <div class="section-label">Product</div>
+    <select id="productSelect"></select>
+  </div>
+
+  <div>
+    <div class="section-label">Zoom Level</div>
+    <input type="range" min="3" max="12" value="7" id="zoomSlider">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+      <span>Continent</span><span>State</span><span>City</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Map Overlays</div>
+    <div class="toggle-row">
+      <span>State Borders</span>
+      <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>County Lines</span>
+      <div class="toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>Highways</span>
+      <div class="toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span>Auto-Refresh (2 min)</span>
+      <div class="toggle on" id="toggleAutoRefresh" onclick="toggleAutoRefresh()"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div class="floating top-bar" id="topBar">
+  <div class="top-left">
+    <button class="icon-btn" onclick="openPanel()">☰</button>
+    <span class="brand">MRMS <span>Radar</span></span>
+  </div>
+  <div class="top-right">
+    <span class="time-pill" id="headerTime">--:-- UTC</span>
+    <button class="icon-btn" onclick="resetView()" title="Reset view">⌂</button>
+  </div>
+</div>
+
+<!-- Zoom -->
+<div class="zoom-stack">
+  <button class="zoom-btn" onclick="zoomIn()">+</button>
+  <button class="zoom-btn" onclick="zoomOut()">−</button>
+</div>
+
+<!-- Bottom bar -->
+<div class="floating bottom-bar" id="bottomBar">
+  <!-- Product chips -->
+  <div class="chip-row" id="chipRow"></div>
+
+  <!-- Time -->
+  <div class="time-display">
+    <span class="live-dot" id="liveDot"></span>
+    <span id="timeDisplay">--:--</span>
+  </div>
+  <div class="time-controls">
+    <button class="time-nav" onclick="stepTime(-4)" title="-8 min">◀◀</button>
+    <button class="time-nav" onclick="stepTime(-1)" title="-2 min">◀</button>
+    <div class="time-slider-wrap">
+      <input type="range" min="0" max="48" value="24" id="timeSlider">
+      <div class="time-labels">
+        <span id="labelStart">--:--</span>
+        <span id="labelEnd">--:--</span>
+      </div>
+    </div>
+    <button class="time-nav" onclick="stepTime(1)" title="+2 min">▶</button>
+    <button class="time-nav" onclick="stepTime(4)" title="+8 min">▶▶</button>
+    <button class="time-nav now-btn" onclick="goLive()">NOW</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Service Worker (PWA)
+// ═══════════════════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════
+
+const STATE = {
+  product: 'M3DL13',
+  zoom: 7,
+  lat: 40.55,
+  lon: -104.68,
+  // timeSlot: 0-48 representing 2-min steps back from "now"
+  timeSlot: 0,     // 0 = live
+  isLive: true,
+  // Map transform
+  imgZoom: 1.5,
+  offsetX: 0,
+  offsetY: 0,
+  // Auto-refresh
+  autoRefresh: true,
+  refreshTimer: null,
+};
+
+const SLOTS = 48; // 48 × 2-min = 96 min = 1h36m history window
+
+let products = [];
+let hideTimer = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOM refs
+// ═══════════════════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const mapContainer = $('mapContainer');
+const mapImage = $('mapImage');
+const mapLoading = $('mapLoading');
+const topBar = $('topBar');
+const sidePanel = $('sidePanel');
+const backdrop = $('backdrop');
+const chipRow = $('chipRow');
+const productSelect = $('productSelect');
+const zoomSlider = $('zoomSlider');
+const timeSlider = $('timeSlider');
+const timeDisplay = $('timeDisplay');
+const headerTime = $('headerTime');
+const liveDot = $('liveDot');
+const toggleAutoRefreshEl = $('toggleAutoRefresh');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════════════
+
+function radarUrl(meta = false) {
+  const params = new URLSearchParams({
+    product: STATE.product,
+    lat: STATE.lat,
+    lon: STATE.lon,
+    zoom: STATE.zoom,
+    width: 920,
+    height: 630,
+  });
+  if (!STATE.isLive) {
+    // Compute timestamp from timeSlot
+    const d = roundToSlot(new Date());
+    d.setMinutes(d.getMinutes() - STATE.timeSlot * 2);
+    params.set('time', d.toISOString().slice(0, 16));
+  }
+  if (meta) params.set('meta', 'true');
+  return `/api/radar?${params}`;
+}
+
+function roundToSlot(d) {
+  const m = Math.floor(d.getMinutes() / 2) * 2;
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+                           d.getHours(), m, 0, 0));
+}
+
+async function fetchImage() {
+  const url = radarUrl();
+  mapLoading.classList.remove('hidden');
+  mapImage.classList.remove('loaded');
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+
+    // Revoke old blob to avoid memory leaks
+    if (mapImage.src.startsWith('blob:')) URL.revokeObjectURL(mapImage.src);
+
+    mapImage.src = objUrl;
+    mapImage.onload = () => {
+      mapImage.classList.add('loaded');
+      mapLoading.classList.add('hidden');
+    };
+
+    // Read timestamp from header
+    const ts = resp.headers.get('X-MRMS-Timestamp') || '';
+    updateTimeDisplay(ts);
+
+  } catch (err) {
+    console.error('Fetch failed:', err);
+    mapLoading.querySelector('span').textContent = 'Failed to load — retrying...';
+    setTimeout(fetchImage, 3000);
+  }
+}
+
+async function fetchMeta() {
+  try {
+    const resp = await fetch(radarUrl(true));
+    if (resp.ok) {
+      const meta = await resp.json();
+      updateTimeDisplay(meta.timestamp);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function updateTimeDisplay(ts) {
+  if (!ts) return;
+  // ts format: "2026-06-06T16:30:00"
+  const parts = ts.split('T');
+  if (parts.length < 2) return;
+  const time = parts[1].slice(0, 5);
+  timeDisplay.textContent = time;
+  headerTime.textContent = time + ' UTC';
+
+  if (STATE.isLive) {
+    liveDot.style.display = 'inline-block';
+  } else {
+    liveDot.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Product loading
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadProducts() {
+  try {
+    const resp = await fetch('/api/products');
+    products = await resp.json();
+    renderChips();
+    renderSelect();
+  } catch (e) {
+    // Fallback to hardcoded list
+    products = [
+      {code:'M3DL13',name:'Refl 4.0km'},{code:'M3DL11',name:'Refl 3.0km'},
+      {code:'M3DL7',name:'Refl 2.0km'},{code:'M3DL5',name:'Refl 1.5km'},
+      {code:'M3DL3',name:'Refl 1.0km'},{code:'M3DL1',name:'Refl 0.5km'},
+      {code:'BREF',name:'Base Refl'},{code:'CREF',name:'Composite'},
+      {code:'SHSR',name:'Hyb Scan'},{code:'RALA',name:'Low Alt'},
+    ];
+    renderChips();
+    renderSelect();
+  }
+}
+
+function renderChips() {
+  chipRow.innerHTML = products.map(p =>
+    `<div class="chip${p.code === STATE.product ? ' active' : ''}"
+          data-code="${p.code}" onclick="selectProduct('${p.code}')">${p.name}</div>`
+  ).join('');
+}
+
+function renderSelect() {
+  productSelect.innerHTML = products.map(p =>
+    `<option value="${p.code}"${p.code === STATE.product ? ' selected' : ''}>${p.name}</option>`
+  ).join('');
+}
+
+function selectProduct(code) {
+  STATE.product = code;
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.code === code);
+  });
+  productSelect.value = code;
+  fetchImage();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Time navigation
+// ═══════════════════════════════════════════════════════════════════════════
+
+function updateTimeLabels() {
+  const now = roundToSlot(new Date());
+  const start = new Date(now.getTime() - SLOTS * 2 * 60000);
+  const end = new Date(now.getTime());
+
+  const fmt = d =>
+    `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+
+  $('labelStart').textContent = fmt(start);
+  $('labelEnd').textContent = STATE.isLive ? 'NOW' : fmt(end);
+}
+
+function stepTime(steps) {
+  STATE.timeSlot = Math.max(0, Math.min(SLOTS, STATE.timeSlot + steps));
+  STATE.isLive = STATE.timeSlot === 0;
+  timeSlider.value = SLOTS - STATE.timeSlot;
+  liveDot.style.display = STATE.isLive ? 'inline-block' : 'none';
+  updateTimeLabels();
+  fetchImage();
+  fetchMeta();
+}
+
+function goLive() {
+  STATE.timeSlot = 0;
+  STATE.isLive = true;
+  timeSlider.value = SLOTS;
+  liveDot.style.display = 'inline-block';
+  updateTimeLabels();
+  fetchImage();
+}
+
+timeSlider.addEventListener('input', () => {
+  STATE.timeSlot = SLOTS - parseInt(timeSlider.value);
+  STATE.isLive = STATE.timeSlot === 0;
+  liveDot.style.display = STATE.isLive ? 'inline-block' : 'none';
+  updateTimeLabels();
+});
+
+timeSlider.addEventListener('change', () => {
+  fetchImage();
+  fetchMeta();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zoom (NOAA zoom level, not CSS zoom)
+// ═══════════════════════════════════════════════════════════════════════════
+
+zoomSlider.addEventListener('input', () => {
+  STATE.zoom = parseInt(zoomSlider.value);
+});
+
+zoomSlider.addEventListener('change', () => {
+  fetchImage();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Product select (side panel dropdown)
+// ═══════════════════════════════════════════════════════════════════════════
+
+productSelect.addEventListener('change', () => {
+  selectProduct(productSelect.value);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Auto-refresh
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleAutoRefresh() {
+  STATE.autoRefresh = !STATE.autoRefresh;
+  if (STATE.autoRefresh) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  STATE.refreshTimer = setInterval(() => {
+    if (STATE.isLive) fetchImage();
+  }, 120000); // every 2 min
+}
+
+function stopAutoRefresh() {
+  if (STATE.refreshTimer) {
+    clearInterval(STATE.refreshTimer);
+    STATE.refreshTimer = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Map pan / pinch-zoom (CSS transform)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let isDragging = false;
+let dragStartX, dragStartY, startOffX, startOffY, lastPinchDist;
+
+function applyTransform() {
+  mapImage.style.transform =
+    `translate(${STATE.offsetX}px, ${STATE.offsetY}px) scale(${STATE.imgZoom})`;
+}
+
+function centerMap() {
+  const cw = mapContainer.clientWidth;
+  const ch = mapContainer.clientHeight;
+  STATE.offsetX = (cw - 920 * STATE.imgZoom) / 2;
+  STATE.offsetY = (ch - 630 * STATE.imgZoom) / 2;
+  applyTransform();
+}
+
+function onDragStart(e) {
+  if (e.target.closest('button, select, input, .floating, .side-panel, .backdrop, .chip, .toggle-row, .zoom-stack')) return;
+  e.preventDefault();
+  isDragging = true;
+  mapContainer.classList.add('dragging');
+  const p = e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY};
+  dragStartX = p.x; dragStartY = p.y;
+  startOffX = STATE.offsetX; startOffY = STATE.offsetY;
+  if (e.touches && e.touches.length === 2) {
+    lastPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                                e.touches[0].clientY - e.touches[1].clientY);
+  }
+}
+
+function onDragMove(e) {
+  if (!isDragging) return;
+  e.preventDefault();
+
+  if (e.touches && e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                         e.touches[0].clientY - e.touches[1].clientY);
+    if (lastPinchDist > 0) {
+      const scale = d / lastPinchDist;
+      const nz = Math.max(0.4, Math.min(8, STATE.imgZoom * scale));
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      STATE.offsetX = mx - (mx - STATE.offsetX) * (nz / STATE.imgZoom);
+      STATE.offsetY = my - (my - STATE.offsetY) * (nz / STATE.imgZoom);
+      STATE.imgZoom = nz;
+    }
+    lastPinchDist = d;
+    applyTransform();
+    return;
+  }
+
+  const p = e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY};
+  STATE.offsetX = startOffX + (p.x - dragStartX);
+  STATE.offsetY = startOffY + (p.y - dragStartY);
+  applyTransform();
+  showTopBar();
+}
+
+function onDragEnd() {
+  isDragging = false;
+  mapContainer.classList.remove('dragging');
+  lastPinchDist = 0;
+  resetHideTimer();
+}
+
+mapContainer.addEventListener('mousedown', onDragStart);
+mapContainer.addEventListener('mousemove', onDragMove);
+mapContainer.addEventListener('mouseup', onDragEnd);
+mapContainer.addEventListener('mouseleave', onDragEnd);
+mapContainer.addEventListener('touchstart', onDragStart, {passive:false});
+mapContainer.addEventListener('touchmove', onDragMove, {passive:false});
+mapContainer.addEventListener('touchend', onDragEnd);
+mapContainer.addEventListener('dblclick', e => e.preventDefault());
+
+// Mouse wheel zoom
+mapContainer.addEventListener('wheel', e => {
+  if (e.target.closest('.side-panel, .floating, .backdrop, .zoom-stack')) return;
+  e.preventDefault();
+  const rect = mapContainer.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const nz = Math.max(0.4, Math.min(8, STATE.imgZoom * factor));
+  STATE.offsetX = mx - (mx - STATE.offsetX) * (nz / STATE.imgZoom);
+  STATE.offsetY = my - (my - STATE.offsetY) * (nz / STATE.imgZoom);
+  STATE.imgZoom = nz;
+  applyTransform();
+  showTopBar();
+}, {passive: false});
+
+function zoomIn() {
+  const cx = mapContainer.clientWidth / 2;
+  const cy = mapContainer.clientHeight / 2;
+  const nz = Math.min(8, STATE.imgZoom * 1.4);
+  STATE.offsetX = cx - (cx - STATE.offsetX) * (nz / STATE.imgZoom);
+  STATE.offsetY = cy - (cy - STATE.offsetY) * (nz / STATE.imgZoom);
+  STATE.imgZoom = nz;
+  applyTransform();
+}
+
+function zoomOut() {
+  const cx = mapContainer.clientWidth / 2;
+  const cy = mapContainer.clientHeight / 2;
+  const nz = Math.max(0.4, STATE.imgZoom / 1.4);
+  STATE.offsetX = cx - (cx - STATE.offsetX) * (nz / STATE.imgZoom);
+  STATE.offsetY = cy - (cy - STATE.offsetY) * (nz / STATE.imgZoom);
+  STATE.imgZoom = nz;
+  applyTransform();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Side panel
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openPanel() { sidePanel.classList.add('open'); backdrop.classList.add('show'); }
+function closePanel() { sidePanel.classList.remove('open'); backdrop.classList.remove('show'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Top bar auto-hide
+// ═══════════════════════════════════════════════════════════════════════════
+
+function showTopBar() { topBar.classList.remove('hidden'); resetHideTimer(); }
+function hideTopBar() { if (!sidePanel.classList.contains('open')) topBar.classList.add('hidden'); }
+function resetHideTimer() { clearTimeout(hideTimer); hideTimer = setTimeout(hideTopBar, 4000); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Global helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+function resetView() {
+  centerMap();
+  STATE.imgZoom = 1.5;
+  centerMap();
+  showTopBar();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePanel();
+  if (e.key === '+' || e.key === '=') zoomIn();
+  if (e.key === '-') zoomOut();
+  if (e.key === 'ArrowLeft') stepTime(1);
+  if (e.key === 'ArrowRight') stepTime(-1);
+  if (e.key === '0') resetView();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function init() {
+  await loadProducts();
+  centerMap();
+  resetHideTimer();
+  updateTimeLabels();
+  fetchImage();
+  startAutoRefresh();
+}
+
+window.addEventListener('resize', centerMap);
+init();
+</script>
+</body>
+</html>
