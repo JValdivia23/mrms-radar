@@ -246,13 +246,16 @@ def test_fetch_radar_uses_cache():
 @pytest.mark.integration
 def test_real_noaa_fetch():
     """Real end-to-end fetch from NOAA MRMS. Skipped if unreachable."""
-    try:
-        img = fetch_radar(product="M3DL13", lat=40.55, lon=-104.68, zoom=7)
-    except Exception as e:
-        pytest.skip(f"NOAA MRMS unreachable: {e}")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with patch("mrms_core.CACHE_DIR", tmpdir):
+            try:
+                img = fetch_radar(product="M3DL13", lat=40.55, lon=-104.68, zoom=7)
+            except Exception as e:
+                pytest.skip(f"NOAA MRMS unreachable: {e}")
 
-    assert len(img.png_bytes) > 100, "PNG too small — likely an error page"
-    assert img.png_bytes[:4] == b"\x89PNG", "Not a valid PNG"
-    assert img.product == "M3DL13"
-    assert img.width == 920
-    assert img.height == 630
+            assert len(img.png_bytes) > 100, "PNG too small — likely an error page"
+            assert img.png_bytes[:4] == b"\x89PNG", "Not a valid PNG"
+            assert img.product == "M3DL13"
+            assert img.width == 920
+            assert img.height == 630
+            assert img.from_cache is False  # fresh fetch with clean cache
