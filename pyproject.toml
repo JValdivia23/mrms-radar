@@ -2,3 +2,6 @@
 markers = [
     "integration: marks tests that hit real NOAA endpoints (deselect with '-m \"not integration\"')",
 ]
+filterwarnings = [
+    "ignore::urllib3.exceptions.InsecureRequestWarning",
+]

@@ -10,6 +10,12 @@ from datetime import datetime, timezone
 
 import requests
 
+# NOAA MRMS server does not send the intermediate CA certificate in its
+# TLS handshake (Sectigo Public Server Authentication CA DV R36).
+# This is a known server-side issue; suppress the InsecureRequestWarning.
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -187,7 +193,9 @@ def fetch_radar(
 
     fetch_time = datetime.now(timezone.utc)
 
-    r = requests.get(RENDER_URL, params=params, headers=headers, timeout=30)
+    r = requests.get(
+        RENDER_URL, params=params, headers=headers, timeout=30, verify=False
+    )
     r.raise_for_status()
 
     # Save to cache
