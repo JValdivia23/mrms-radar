@@ -13,7 +13,7 @@
 
   :root{
     --panel-bg:rgba(18,20,26,.94);
-    --panel-border:rgba(255,255,255,.08);
+    --panel-border:rgba(255,255,255,.06);
     --text:#e8eaed;
     --text-muted:#8b9098;
     --accent:#5b9ef5;
@@ -45,33 +45,24 @@
     position:absolute;
     transform-origin:0 0;
     will-change:transform;
-    opacity:0;
-    transition:opacity .25s;
+    opacity:0;transition:opacity .25s;
     width:920px;height:630px;
     background:#111;
     box-shadow:0 0 0 2px rgba(255,255,255,.05);
   }
   .map-image.loaded{opacity:1}
 
-  .map-loading{
-    position:absolute;top:50%;left:50%;
-    transform:translate(-50%,-50%);
+  .map-loading,.map-error{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     display:flex;flex-direction:column;align-items:center;gap:12px;
-    color:var(--text-muted);font-size:14px;
-    pointer-events:none;z-index:10;
-    transition:opacity .25s;
+    z-index:10;transition:opacity .25s;
   }
+  .map-loading{color:var(--text-muted);font-size:14px;pointer-events:none}
   .map-loading.hidden{opacity:0}
-  .map-error{
-    position:absolute;top:50%;left:50%;
-    transform:translate(-50%,-50%);
-    display:none;flex-direction:column;align-items:center;gap:12px;
-    color:var(--danger);font-size:14px;text-align:center;
-    z-index:10;
-    background:rgba(0,0,0,.7);padding:24px 32px;border-radius:12px;
-    max-width:300px;
-  }
+  .map-error{display:none;color:var(--danger);font-size:14px;text-align:center;
+    background:rgba(0,0,0,.7);padding:24px 32px;border-radius:12px;max-width:300px}
   .map-error.show{display:flex}
+
   .spinner{
     width:28px;height:28px;
     border:3px solid rgba(255,255,255,.1);
@@ -98,12 +89,11 @@
     top:max(12px,env(safe-area-inset-top));
     left:12px;right:12px;
     display:flex;align-items:center;justify-content:space-between;
-    padding:6px 12px;
+    padding:8px 14px;
     opacity:1;transform:translateY(0);
   }
   .top-bar.hidden{opacity:0;transform:translateY(-120%);pointer-events:none}
 
-  .top-left,.top-right{display:flex;align-items:center;gap:4px}
   .icon-btn{
     width:38px;height:38px;border-radius:50%;border:none;
     background:transparent;color:var(--text);font-size:18px;
@@ -116,17 +106,11 @@
   .brand{font-size:14px;font-weight:600;letter-spacing:.4px}
   .brand span{color:var(--accent)}
 
-  .time-pill{
-    font-size:12px;color:var(--text-muted);
-    padding:4px 12px;background:rgba(255,255,255,.05);
-    border-radius:20px;white-space:nowrap;font-variant-numeric:tabular-nums;
-  }
-
   /* ── Side panel ── */
   .side-panel{
     position:fixed;top:0;left:0;bottom:0;
     width:min(340px,88vw);
-    background:rgba(14,16,22,.96);
+    background:rgba(14,16,22,.97);
     backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
     border-right:1px solid var(--panel-border);
     z-index:200;
@@ -134,7 +118,7 @@
     transform:translateX(-100%);
     transition:transform .28s cubic-bezier(.4,0,.2,1);
     overflow-y:auto;
-    display:flex;flex-direction:column;gap:22px;
+    display:flex;flex-direction:column;gap:20px;
   }
   .side-panel.open{transform:translateX(0)}
 
@@ -143,28 +127,42 @@
 
   .section-label{
     font-size:10px;text-transform:uppercase;letter-spacing:1.2px;
-    color:var(--text-muted);margin-bottom:8px;
+    color:var(--text-muted);margin-bottom:6px;
   }
 
-  select,input[type=range]{
+  /* Select styling */
+  select{
     width:100%;background:rgba(255,255,255,.05);
     border:1px solid var(--panel-border);border-radius:10px;
-    color:var(--text);padding:10px 12px;font-size:14px;outline:none;
+    color:var(--text);padding:12px 14px;font-size:14px;outline:none;
     -webkit-appearance:none;appearance:none;
+    cursor:pointer;
   }
-  select{cursor:pointer}
   select option{background:#181a22;color:var(--text)}
 
+  /* Level slider */
+  .level-slider-wrap{margin-top:4px}
+  .level-value{
+    text-align:center;font-size:24px;font-weight:300;
+    color:var(--accent);margin-bottom:4px;
+  }
   input[type=range]{
-    -webkit-appearance:none;height:4px;padding:0;
-    background:rgba(255,255,255,.1);border:none;margin:8px 0;
+    width:100%;-webkit-appearance:none;
+    height:4px;background:rgba(255,255,255,.1);
+    border:none;border-radius:2px;outline:none;
   }
   input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;width:22px;height:22px;
-    border-radius:50%;background:var(--accent);cursor:pointer;
-    box-shadow:0 0 12px rgba(91,158,245,.4);
+    -webkit-appearance:none;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--accent);cursor:pointer;
+    box-shadow:0 0 16px rgba(91,158,245,.4);
+  }
+  .level-labels{
+    display:flex;justify-content:space-between;
+    font-size:10px;color:var(--text-muted);margin-top:2px;
   }
 
+  /* Toggle rows */
   .toggle-row{
     display:flex;align-items:center;justify-content:space-between;
     padding:10px 0;font-size:14px;
@@ -190,26 +188,6 @@
   }
   .backdrop.show{opacity:1;pointer-events:auto}
 
-  /* ── Product chips ── */
-  .chip-row{
-    display:flex;gap:6px;overflow-x:auto;
-    padding-bottom:4px;-webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-  }
-  .chip-row::-webkit-scrollbar{display:none}
-  .chip{
-    flex-shrink:0;padding:8px 16px;border-radius:20px;
-    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);
-    color:var(--text-muted);font-size:12px;cursor:pointer;
-    transition:background .15s,border-color .15s,color .15s;
-    white-space:nowrap;
-  }
-  .chip.active{
-    background:rgba(91,158,245,.14);
-    border-color:rgba(91,158,245,.3);
-    color:var(--accent);
-  }
-
   /* ── Bottom bar ── */
   .bottom-bar{
     bottom:max(16px,env(safe-area-inset-bottom));
@@ -219,9 +197,15 @@
     min-width:min(420px,92vw);
   }
 
-  .time-controls{
-    display:flex;align-items:center;gap:10px;
+  /* Current product badge */
+  .product-badge{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--text-muted);
   }
+  .product-badge strong{color:var(--text);font-weight:500}
+
+  /* Time */
+  .time-controls{display:flex;align-items:center;gap:10px}
   .time-nav{
     width:34px;height:34px;border-radius:50%;border:1px solid var(--panel-border);
     background:rgba(255,255,255,.05);color:var(--text);
@@ -230,10 +214,19 @@
     transition:background .15s;
   }
   .time-nav:hover{background:rgba(255,255,255,.1)}
-  .time-nav.now-btn{
-    width:auto;padding:0 12px;border-radius:16px;
-    font-size:11px;font-weight:700;letter-spacing:.5px;
+  .time-nav.now-btn{width:auto;padding:0 12px;border-radius:16px;font-size:11px;font-weight:700}
+
+  .time-display{
+    text-align:center;font-size:28px;font-weight:300;letter-spacing:-.5px;
+    font-variant-numeric:tabular-nums;
+    display:flex;align-items:center;justify-content:center;gap:8px;
   }
+  .live-dot{
+    display:inline-block;width:7px;height:7px;
+    background:var(--danger);border-radius:50%;
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
   .time-slider-wrap{flex:1;min-width:0}
   .time-labels{
@@ -241,21 +234,7 @@
     font-size:10px;color:var(--text-muted);margin-top:2px;
   }
 
-  .live-dot{
-    display:inline-block;width:7px;height:7px;
-    background:var(--danger);border-radius:50%;
-    animation:pulse 2s ease-in-out infinite;
-    vertical-align:middle;margin-right:2px;
-  }
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-  .time-display{
-    display:flex;align-items:center;justify-content:center;gap:8px;
-    font-size:28px;font-weight:300;letter-spacing:-.5px;
-    font-variant-numeric:tabular-nums;
-  }
-
-  /* ── Zoom buttons (desktop right) ── */
+  /* ── Zoom stack (desktop) ── */
   .zoom-stack{
     position:fixed;right:12px;top:50%;transform:translateY(-50%);
     z-index:100;display:flex;flex-direction:column;gap:4px;
@@ -269,16 +248,6 @@
     display:flex;align-items:center;justify-content:center;
   }
 
-  /* ── Location search bar (hidden by default, shown on desktop) ── */
-  .loc-pill{
-    position:fixed;bottom:50%;left:50%;transform:translate(-50%,-50%);
-    z-index:90;padding:6px 14px;background:var(--panel-bg);
-    border-radius:20px;font-size:12px;color:var(--text-muted);
-    pointer-events:none;opacity:0;transition:opacity .3s;
-    white-space:nowrap;
-  }
-  .loc-pill.visible{opacity:1}
-
   /* ── Responsive ── */
   @media(max-width:640px){
     .brand{display:none}
@@ -287,7 +256,7 @@
     .side-panel{width:100vw}
     .zoom-stack{right:6px;gap:2px}
     .zoom-btn{width:30px;height:30px;font-size:16px}
-    .chip{font-size:11px;padding:6px 12px}
+    .level-value{font-size:20px}
   }
 </style>
 </head>
@@ -319,11 +288,32 @@
     <button class="icon-btn" onclick="closePanel()">✕</button>
   </div>
 
+  <!-- Category -->
   <div>
     <div class="section-label">Product</div>
-    <select id="productSelect"></select>
+    <select id="categorySelect"></select>
   </div>
 
+  <!-- Level sub-selector (shown for 3D products) -->
+  <div id="levelSection" style="display:none">
+    <div class="section-label">Altitude</div>
+    <div class="level-slider-wrap">
+      <div class="level-value" id="levelValue">4.0 km</div>
+      <input type="range" id="levelSlider">
+      <div class="level-labels">
+        <span id="levelMin">0.5 km</span>
+        <span id="levelMax">19 km</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sub-product selector (for non-level categories) -->
+  <div id="subProductSection" style="display:none">
+    <div class="section-label">Variant</div>
+    <select id="subProductSelect"></select>
+  </div>
+
+  <!-- Zoom -->
   <div>
     <div class="section-label">Zoom Level</div>
     <input type="range" min="3" max="12" value="7" id="zoomSlider">
@@ -332,8 +322,9 @@
     </div>
   </div>
 
+  <!-- Overlays -->
   <div>
-    <div class="section-label">Map Overlays</div>
+    <div class="section-label">Overlays</div>
     <div class="toggle-row">
       <span>State Borders</span>
       <div class="toggle on" onclick="this.classList.toggle('on')"></div>
@@ -348,19 +339,19 @@
     </div>
     <div class="toggle-row">
       <span>Auto-Refresh (2 min)</span>
-      <div class="toggle on" id="toggleAutoRefresh" onclick="toggleAutoRefresh()"></div>
+      <div class="toggle on" id="toggleAutoRefreshEl" onclick="toggleAutoRefresh()"></div>
     </div>
   </div>
 </div>
 
 <!-- Top bar -->
 <div class="floating top-bar" id="topBar">
-  <div class="top-left">
+  <div style="display:flex;align-items:center;gap:4px">
     <button class="icon-btn" onclick="openPanel()">☰</button>
     <span class="brand">MRMS <span>Radar</span></span>
   </div>
-  <div class="top-right">
-    <span class="time-pill" id="headerTime">--:-- UTC</span>
+  <div style="display:flex;align-items:center;gap:4px">
+    <span style="font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums" id="headerTime">--:-- UTC</span>
     <button class="icon-btn" onclick="resetView()" title="Reset view">⌂</button>
   </div>
 </div>
@@ -372,23 +363,24 @@
 </div>
 
 <!-- Bottom bar -->
-<div class="floating bottom-bar" id="bottomBar">
-  <!-- Product chips -->
-  <div class="chip-row" id="chipRow"></div>
+<div class="floating bottom-bar">
+  <div class="product-badge" id="productBadge">
+    <strong>Refl</strong> 4.0 km
+  </div>
 
-  <!-- Time -->
   <div class="time-display">
     <span class="live-dot" id="liveDot"></span>
     <span id="timeDisplay">--:--</span>
   </div>
+
   <div class="time-controls">
     <button class="time-nav" onclick="stepTime(-4)" title="-8 min">◀◀</button>
     <button class="time-nav" onclick="stepTime(-1)" title="-2 min">◀</button>
     <div class="time-slider-wrap">
-      <input type="range" min="0" max="48" value="24" id="timeSlider">
+      <input type="range" min="0" max="48" value="48" id="timeSlider">
       <div class="time-labels">
         <span id="labelStart">--:--</span>
-        <span id="labelEnd">--:--</span>
+        <span id="labelEnd">NOW</span>
       </div>
     </div>
     <button class="time-nav" onclick="stepTime(1)" title="+2 min">▶</button>
@@ -399,447 +391,349 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// Service Worker (PWA)
+// Service Worker
 // ═══════════════════════════════════════════════════════════════════════════
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js');
-}
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shortcuts (must be defined before any usage)
+// ═══════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════════════
-
-const STATE = {
-  product: 'M3DL13',
+const S = {
+  categoryIdx: 0,      // index into categories[]
+  levelIdx: 12,         // index into category.products[] (M3DL13 = index 12)
   zoom: 7,
-  lat: 40.55,
-  lon: -104.68,
-  // timeSlot: 0-48 representing 2-min steps back from "now"
-  timeSlot: 0,     // 0 = live
-  isLive: true,
-  // Map transform
-  imgZoom: 1.5,
-  offsetX: 0,
-  offsetY: 0,
-  // Auto-refresh
-  autoRefresh: true,
-  refreshTimer: null,
+  lat: 40.55, lon: -104.68,
+  timeSlot: 0, isLive: true,
+  imgZoom: 1.5, offsetX: 0, offsetY: 0,
+  autoRefresh: true, refreshTimer: null,
 };
-
-const SLOTS = 48; // 48 × 2-min = 96 min = 1h36m history window
-
-let products = [];
+const SLOTS = 48;
+let categories = [];
 let hideTimer = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DOM refs
+// Derived
 // ═══════════════════════════════════════════════════════════════════════════
-
-const $ = id => document.getElementById(id);
-const mapContainer = $('mapContainer');
-const mapImage = $('mapImage');
-const mapLoading = $('mapLoading');
-const topBar = $('topBar');
-const sidePanel = $('sidePanel');
-const backdrop = $('backdrop');
-const chipRow = $('chipRow');
-const productSelect = $('productSelect');
-const zoomSlider = $('zoomSlider');
-const timeSlider = $('timeSlider');
-const timeDisplay = $('timeDisplay');
-const headerTime = $('headerTime');
-const liveDot = $('liveDot');
-const toggleAutoRefreshEl = $('toggleAutoRefresh');
+function cat()    { return categories[S.categoryIdx]; }
+function product(){ return cat() ? cat().products[S.levelIdx] : null; }
+function prodCode(){ const p = product(); return p ? p.code : 'M3DL13'; }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════════════════════════
-
-function radarUrl(meta = false) {
-  const params = new URLSearchParams({
-    product: STATE.product,
-    lat: STATE.lat,
-    lon: STATE.lon,
-    zoom: STATE.zoom,
-    width: 920,
-    height: 630,
+function radarUrl(meta=false){
+  const p = new URLSearchParams({
+    product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
+    width: 920, height: 630,
   });
-  if (!STATE.isLive) {
-    // Compute timestamp from timeSlot
-    const d = roundToSlot(new Date());
-    d.setMinutes(d.getMinutes() - STATE.timeSlot * 2);
-    params.set('time', d.toISOString().slice(0, 16));
+  if(!S.isLive){
+    const d = roundSlot(new Date());
+    d.setMinutes(d.getMinutes() - S.timeSlot * 2);
+    p.set('time', d.toISOString().slice(0,16));
   }
-  if (meta) params.set('meta', 'true');
-  return `/api/radar?${params}`;
+  if(meta) p.set('meta','true');
+  return '/api/radar?'+p;
+}
+function roundSlot(d){
+  const m = Math.floor(d.getMinutes()/2)*2;
+  return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),m,0,0));
 }
 
-function roundToSlot(d) {
-  const m = Math.floor(d.getMinutes() / 2) * 2;
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
-                           d.getHours(), m, 0, 0));
-}
-
-async function fetchImage() {
+async function fetchImage(){
   const url = radarUrl();
-  mapLoading.classList.remove('hidden');
-  mapImage.classList.remove('loaded');
+  $('mapLoading').classList.remove('hidden');
+  $('mapError').classList.remove('show');
+  $('mapImage').classList.remove('loaded');
+  try{
+    const r = await fetch(url);
+    if(!r.ok) throw Error('HTTP '+r.status);
+    const blob = await r.blob();
+    if($('mapImage').src.startsWith('blob:')) URL.revokeObjectURL($('mapImage').src);
+    $('mapImage').src = URL.createObjectURL(blob);
+    $('mapImage').onload = ()=>{
+      $('mapImage').classList.add('loaded');
+      $('mapLoading').classList.add('hidden');
+    };
+    const ts = r.headers.get('X-MRMS-Timestamp')||'';
+    updateTimeDisplay(ts);
+  }catch(e){
+    console.error(e);
+    $('mapLoading').querySelector('span').textContent='Retrying...';
+    setTimeout(fetchImage,3000);
+  }
+}
 
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const blob = await resp.blob();
-    const objUrl = URL.createObjectURL(blob);
+function updateTimeDisplay(ts){
+  const parts = ts.split('T');
+  if(parts.length<2) return;
+  const t = parts[1].slice(0,5);
+  $('timeDisplay').textContent = t;
+  $('headerTime').textContent = t+' UTC';
+  $('liveDot').style.display = S.isLive ? 'inline-block' : 'none';
+}
 
-    // Revoke old blob to avoid memory leaks
-    if (mapImage.src.startsWith('blob:')) URL.revokeObjectURL(mapImage.src);
+// ═══════════════════════════════════════════════════════════════════════════
+// Product catalog loading
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadCategories(){
+  try{
+    const r = await fetch('/api/products');
+    categories = await r.json();
+  }catch(e){
+    // fallback
+    categories = [{code:'level',name:'3D Reflectivity',default_product:'M3DL13',
+      has_levels:true,level_suffix:'km',
+      products:[{code:'M3DL1',name:'0.5 km'},{code:'M3DL7',name:'2.0 km'},{code:'M3DL13',name:'4.0 km'}]},
+      {code:'brefls',name:'Base Reflectivity',default_product:'BREF',has_levels:false,
+        products:[{code:'BREF',name:'Base Reflectivity'}]}];
+  }
+  // Set default: 3D Reflectivity, level index 12 (4.0 km)
+  S.categoryIdx = categories.findIndex(c=>c.code==='level');
+  if(S.categoryIdx<0) S.categoryIdx=0;
+  const c = cat();
+  S.levelIdx = c.products.findIndex(p=>p.code===c.default_product);
+  if(S.levelIdx<0) S.levelIdx=0;
 
-    mapImage.src = objUrl;
-    mapImage.onload = () => {
-      mapImage.classList.add('loaded');
-      mapLoading.classList.add('hidden');
+  renderCategorySelect();
+  renderLevelSelector();
+  updateProductBadge();
+}
+
+function renderCategorySelect(){
+  const sel = $('categorySelect');
+  sel.innerHTML = categories.map((c,i)=>
+    `<option value="${i}"${i===S.categoryIdx?' selected':''}>${c.name}</option>`
+  ).join('');
+  sel.onchange = ()=>{
+    S.categoryIdx = parseInt(sel.value);
+    const c = cat();
+    S.levelIdx = c.products.findIndex(p=>p.code===c.default_product);
+    if(S.levelIdx<0) S.levelIdx=0;
+    renderLevelSelector();
+    updateProductBadge();
+    fetchImage();
+  };
+}
+
+function renderLevelSelector(){
+  const c = cat();
+  if(!c) return;
+
+  if(c.has_levels){
+    $('levelSection').style.display = 'block';
+    $('subProductSection').style.display = 'none';
+
+    const slider = $('levelSlider');
+    slider.min = 0;
+    slider.max = c.products.length - 1;
+    slider.value = S.levelIdx;
+    slider.oninput = ()=>{
+      S.levelIdx = parseInt(slider.value);
+      $('levelValue').textContent = c.products[S.levelIdx].name;
+    };
+    slider.onchange = ()=>{
+      updateProductBadge();
+      fetchImage();
     };
 
-    // Read timestamp from header
-    const ts = resp.headers.get('X-MRMS-Timestamp') || '';
-    updateTimeDisplay(ts);
-
-  } catch (err) {
-    console.error('Fetch failed:', err);
-    mapLoading.querySelector('span').textContent = 'Failed to load — retrying...';
-    setTimeout(fetchImage, 3000);
-  }
-}
-
-async function fetchMeta() {
-  try {
-    const resp = await fetch(radarUrl(true));
-    if (resp.ok) {
-      const meta = await resp.json();
-      updateTimeDisplay(meta.timestamp);
-    }
-  } catch (e) { /* ignore */ }
-}
-
-function updateTimeDisplay(ts) {
-  if (!ts) return;
-  // ts format: "2026-06-06T16:30:00"
-  const parts = ts.split('T');
-  if (parts.length < 2) return;
-  const time = parts[1].slice(0, 5);
-  timeDisplay.textContent = time;
-  headerTime.textContent = time + ' UTC';
-
-  if (STATE.isLive) {
-    liveDot.style.display = 'inline-block';
+    $('levelValue').textContent = c.products[S.levelIdx].name;
+    $('levelMin').textContent = c.products[0].name;
+    $('levelMax').textContent = c.products[c.products.length-1].name;
   } else {
-    liveDot.style.display = 'none';
+    $('levelSection').style.display = 'none';
+    $('subProductSection').style.display = 'block';
+
+    const sel = $('subProductSelect');
+    sel.innerHTML = c.products.map((p,i)=>
+      `<option value="${i}"${i===S.levelIdx?' selected':''}>${p.name}</option>`
+    ).join('');
+    sel.onchange = ()=>{
+      S.levelIdx = parseInt(sel.value);
+      updateProductBadge();
+      fetchImage();
+    };
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Product loading
-// ═══════════════════════════════════════════════════════════════════════════
-
-async function loadProducts() {
-  try {
-    const resp = await fetch('/api/products');
-    products = await resp.json();
-    renderChips();
-    renderSelect();
-  } catch (e) {
-    // Fallback to hardcoded list
-    products = [
-      {code:'M3DL13',name:'Refl 4.0km'},{code:'M3DL11',name:'Refl 3.0km'},
-      {code:'M3DL7',name:'Refl 2.0km'},{code:'M3DL5',name:'Refl 1.5km'},
-      {code:'M3DL3',name:'Refl 1.0km'},{code:'M3DL1',name:'Refl 0.5km'},
-      {code:'BREF',name:'Base Refl'},{code:'CREF',name:'Composite'},
-      {code:'SHSR',name:'Hyb Scan'},{code:'RALA',name:'Low Alt'},
-    ];
-    renderChips();
-    renderSelect();
-  }
-}
-
-function renderChips() {
-  chipRow.innerHTML = products.map(p =>
-    `<div class="chip${p.code === STATE.product ? ' active' : ''}"
-          data-code="${p.code}" onclick="selectProduct('${p.code}')">${p.name}</div>`
-  ).join('');
-}
-
-function renderSelect() {
-  productSelect.innerHTML = products.map(p =>
-    `<option value="${p.code}"${p.code === STATE.product ? ' selected' : ''}>${p.name}</option>`
-  ).join('');
-}
-
-function selectProduct(code) {
-  STATE.product = code;
-  document.querySelectorAll('.chip').forEach(c => {
-    c.classList.toggle('active', c.dataset.code === code);
-  });
-  productSelect.value = code;
-  fetchImage();
+function updateProductBadge(){
+  const c = cat();
+  const p = product();
+  if(!c||!p) return;
+  $('productBadge').innerHTML = `<strong>${c.name}</strong> ${p.name}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Time navigation
+// Time
 // ═══════════════════════════════════════════════════════════════════════════
-
-function updateTimeLabels() {
-  const now = roundToSlot(new Date());
-  const start = new Date(now.getTime() - SLOTS * 2 * 60000);
-  const end = new Date(now.getTime());
-
-  const fmt = d =>
-    `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
-
+function updateTimeLabels(){
+  const now = roundSlot(new Date());
+  const start = new Date(now.getTime() - SLOTS*2*60000);
+  const fmt = d=>`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
   $('labelStart').textContent = fmt(start);
-  $('labelEnd').textContent = STATE.isLive ? 'NOW' : fmt(end);
+  $('labelEnd').textContent = S.isLive ? 'NOW' : fmt(new Date(now.getTime()));
+  $('timeSlider').value = SLOTS - S.timeSlot;
 }
 
-function stepTime(steps) {
-  STATE.timeSlot = Math.max(0, Math.min(SLOTS, STATE.timeSlot + steps));
-  STATE.isLive = STATE.timeSlot === 0;
-  timeSlider.value = SLOTS - STATE.timeSlot;
-  liveDot.style.display = STATE.isLive ? 'inline-block' : 'none';
-  updateTimeLabels();
-  fetchImage();
-  fetchMeta();
-}
-
-function goLive() {
-  STATE.timeSlot = 0;
-  STATE.isLive = true;
-  timeSlider.value = SLOTS;
-  liveDot.style.display = 'inline-block';
+function stepTime(n){
+  S.timeSlot = Math.max(0, Math.min(SLOTS, S.timeSlot + n));
+  S.isLive = S.timeSlot===0;
+  $('liveDot').style.display = S.isLive?'inline-block':'none';
   updateTimeLabels();
   fetchImage();
 }
-
-timeSlider.addEventListener('input', () => {
-  STATE.timeSlot = SLOTS - parseInt(timeSlider.value);
-  STATE.isLive = STATE.timeSlot === 0;
-  liveDot.style.display = STATE.isLive ? 'inline-block' : 'none';
+function goLive(){
+  S.timeSlot = 0; S.isLive = true;
+  $('liveDot').style.display = 'inline-block';
   updateTimeLabels();
-});
-
-timeSlider.addEventListener('change', () => {
   fetchImage();
-  fetchMeta();
-});
+}
+$('timeSlider').oninput = ()=>{
+  S.timeSlot = SLOTS - parseInt($('timeSlider').value);
+  S.isLive = S.timeSlot===0;
+  $('liveDot').style.display = S.isLive?'inline-block':'none';
+  updateTimeLabels();
+};
+$('timeSlider').onchange = ()=> fetchImage();
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Zoom (NOAA zoom level, not CSS zoom)
+// Zoom (NOAA level)
 // ═══════════════════════════════════════════════════════════════════════════
-
-zoomSlider.addEventListener('input', () => {
-  STATE.zoom = parseInt(zoomSlider.value);
-});
-
-zoomSlider.addEventListener('change', () => {
-  fetchImage();
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Product select (side panel dropdown)
-// ═══════════════════════════════════════════════════════════════════════════
-
-productSelect.addEventListener('change', () => {
-  selectProduct(productSelect.value);
-});
+$('zoomSlider').onchange = ()=>{ S.zoom = parseInt($('zoomSlider').value); fetchImage(); };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Auto-refresh
 // ═══════════════════════════════════════════════════════════════════════════
-
-function toggleAutoRefresh() {
-  STATE.autoRefresh = !STATE.autoRefresh;
-  if (STATE.autoRefresh) {
-    startAutoRefresh();
-  } else {
-    stopAutoRefresh();
-  }
+function toggleAutoRefresh(){
+  S.autoRefresh = !S.autoRefresh;
+  S.autoRefresh ? startAutoRefresh() : stopAutoRefresh();
 }
-
-function startAutoRefresh() {
+function startAutoRefresh(){
   stopAutoRefresh();
-  STATE.refreshTimer = setInterval(() => {
-    if (STATE.isLive) fetchImage();
-  }, 120000); // every 2 min
+  S.refreshTimer = setInterval(()=>{ if(S.isLive) fetchImage(); }, 120000);
 }
-
-function stopAutoRefresh() {
-  if (STATE.refreshTimer) {
-    clearInterval(STATE.refreshTimer);
-    STATE.refreshTimer = null;
-  }
+function stopAutoRefresh(){
+  if(S.refreshTimer){ clearInterval(S.refreshTimer); S.refreshTimer = null; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Map pan / pinch-zoom (CSS transform)
+// Map pan / pinch / wheel
 // ═══════════════════════════════════════════════════════════════════════════
-
-let isDragging = false;
-let dragStartX, dragStartY, startOffX, startOffY, lastPinchDist;
-
-function applyTransform() {
-  mapImage.style.transform =
-    `translate(${STATE.offsetX}px, ${STATE.offsetY}px) scale(${STATE.imgZoom})`;
+let isDragging,dx0,dy0,ox0,oy0,lastD;
+function applyT(){
+  $('mapImage').style.transform = `translate(${S.offsetX}px,${S.offsetY}px) scale(${S.imgZoom})`;
+}
+function centerMap(){
+  const cw = $('mapContainer').clientWidth, ch = $('mapContainer').clientHeight;
+  S.offsetX = (cw - 920*S.imgZoom)/2;
+  S.offsetY = (ch - 630*S.imgZoom)/2;
+  applyT();
 }
 
-function centerMap() {
-  const cw = mapContainer.clientWidth;
-  const ch = mapContainer.clientHeight;
-  STATE.offsetX = (cw - 920 * STATE.imgZoom) / 2;
-  STATE.offsetY = (ch - 630 * STATE.imgZoom) / 2;
-  applyTransform();
-}
+$('mapContainer').addEventListener('mousedown',e=>{
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  e.preventDefault(); isDragging=true;
+  $('mapContainer').classList.add('dragging');
+  dx0=e.clientX;dy0=e.clientY;ox0=S.offsetX;oy0=S.offsetY;
+});
+$('mapContainer').addEventListener('mousemove',e=>{
+  if(!isDragging) return; e.preventDefault();
+  S.offsetX=ox0+(e.clientX-dx0); S.offsetY=oy0+(e.clientY-dy0);
+  applyT(); showTopBar();
+});
+$('mapContainer').addEventListener('mouseup',()=>{isDragging=false;$('mapContainer').classList.remove('dragging');resetHideTimer()});
+$('mapContainer').addEventListener('mouseleave',()=>{isDragging=false;$('mapContainer').classList.remove('dragging')});
 
-function onDragStart(e) {
-  if (e.target.closest('button, select, input, .floating, .side-panel, .backdrop, .chip, .toggle-row, .zoom-stack')) return;
-  e.preventDefault();
-  isDragging = true;
-  mapContainer.classList.add('dragging');
-  const p = e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY};
-  dragStartX = p.x; dragStartY = p.y;
-  startOffX = STATE.offsetX; startOffY = STATE.offsetY;
-  if (e.touches && e.touches.length === 2) {
-    lastPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                                e.touches[0].clientY - e.touches[1].clientY);
-  }
-}
-
-function onDragMove(e) {
-  if (!isDragging) return;
-  e.preventDefault();
-
-  if (e.touches && e.touches.length === 2) {
-    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
-                         e.touches[0].clientY - e.touches[1].clientY);
-    if (lastPinchDist > 0) {
-      const scale = d / lastPinchDist;
-      const nz = Math.max(0.4, Math.min(8, STATE.imgZoom * scale));
-      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      STATE.offsetX = mx - (mx - STATE.offsetX) * (nz / STATE.imgZoom);
-      STATE.offsetY = my - (my - STATE.offsetY) * (nz / STATE.imgZoom);
-      STATE.imgZoom = nz;
+$('mapContainer').addEventListener('touchstart',e=>{
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  e.preventDefault(); isDragging=true;
+  $('mapContainer').classList.add('dragging');
+  dx0=e.touches[0].clientX;dy0=e.touches[0].clientY;ox0=S.offsetX;oy0=S.offsetY;
+  if(e.touches.length===2) lastD = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+},{passive:false});
+$('mapContainer').addEventListener('touchmove',e=>{
+  if(!isDragging) return; e.preventDefault();
+  if(e.touches.length===2){
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    if(lastD>0){
+      const s = d/lastD, nz = Math.max(.4,Math.min(8,S.imgZoom*s));
+      const mx=(e.touches[0].clientX+e.touches[1].clientX)/2, my=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      S.offsetX = mx - (mx-S.offsetX)*(nz/S.imgZoom);
+      S.offsetY = my - (my-S.offsetY)*(nz/S.imgZoom);
+      S.imgZoom = nz;
     }
-    lastPinchDist = d;
-    applyTransform();
-    return;
+    lastD=d; applyT(); return;
   }
+  S.offsetX=ox0+(e.touches[0].clientX-dx0); S.offsetY=oy0+(e.touches[0].clientY-dy0);
+  applyT(); showTopBar();
+},{passive:false});
+$('mapContainer').addEventListener('touchend',()=>{isDragging=false;$('mapContainer').classList.remove('dragging');lastD=0;resetHideTimer()});
+$('mapContainer').addEventListener('dblclick',e=>e.preventDefault());
 
-  const p = e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY};
-  STATE.offsetX = startOffX + (p.x - dragStartX);
-  STATE.offsetY = startOffY + (p.y - dragStartY);
-  applyTransform();
-  showTopBar();
-}
-
-function onDragEnd() {
-  isDragging = false;
-  mapContainer.classList.remove('dragging');
-  lastPinchDist = 0;
-  resetHideTimer();
-}
-
-mapContainer.addEventListener('mousedown', onDragStart);
-mapContainer.addEventListener('mousemove', onDragMove);
-mapContainer.addEventListener('mouseup', onDragEnd);
-mapContainer.addEventListener('mouseleave', onDragEnd);
-mapContainer.addEventListener('touchstart', onDragStart, {passive:false});
-mapContainer.addEventListener('touchmove', onDragMove, {passive:false});
-mapContainer.addEventListener('touchend', onDragEnd);
-mapContainer.addEventListener('dblclick', e => e.preventDefault());
-
-// Mouse wheel zoom
-mapContainer.addEventListener('wheel', e => {
-  if (e.target.closest('.side-panel, .floating, .backdrop, .zoom-stack')) return;
+$('mapContainer').addEventListener('wheel',e=>{
+  if(e.target.closest('.side-panel,.floating,.backdrop,.zoom-stack')) return;
   e.preventDefault();
-  const rect = mapContainer.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-  const nz = Math.max(0.4, Math.min(8, STATE.imgZoom * factor));
-  STATE.offsetX = mx - (mx - STATE.offsetX) * (nz / STATE.imgZoom);
-  STATE.offsetY = my - (my - STATE.offsetY) * (nz / STATE.imgZoom);
-  STATE.imgZoom = nz;
-  applyTransform();
-  showTopBar();
-}, {passive: false});
+  const r = $('mapContainer').getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const f = e.deltaY<0?1.15:1/1.15;
+  const nz = Math.max(.4,Math.min(8,S.imgZoom*f));
+  S.offsetX = mx - (mx-S.offsetX)*(nz/S.imgZoom);
+  S.offsetY = my - (my-S.offsetY)*(nz/S.imgZoom);
+  S.imgZoom=nz; applyT(); showTopBar();
+},{passive:false});
 
-function zoomIn() {
-  const cx = mapContainer.clientWidth / 2;
-  const cy = mapContainer.clientHeight / 2;
-  const nz = Math.min(8, STATE.imgZoom * 1.4);
-  STATE.offsetX = cx - (cx - STATE.offsetX) * (nz / STATE.imgZoom);
-  STATE.offsetY = cy - (cy - STATE.offsetY) * (nz / STATE.imgZoom);
-  STATE.imgZoom = nz;
-  applyTransform();
+function zoomIn(){
+  const cx=$('mapContainer').clientWidth/2, cy=$('mapContainer').clientHeight/2;
+  const nz=Math.min(8,S.imgZoom*1.4);
+  S.offsetX=cx-(cx-S.offsetX)*(nz/S.imgZoom); S.offsetY=cy-(cy-S.offsetY)*(nz/S.imgZoom);
+  S.imgZoom=nz; applyT();
 }
-
-function zoomOut() {
-  const cx = mapContainer.clientWidth / 2;
-  const cy = mapContainer.clientHeight / 2;
-  const nz = Math.max(0.4, STATE.imgZoom / 1.4);
-  STATE.offsetX = cx - (cx - STATE.offsetX) * (nz / STATE.imgZoom);
-  STATE.offsetY = cy - (cy - STATE.offsetY) * (nz / STATE.imgZoom);
-  STATE.imgZoom = nz;
-  applyTransform();
+function zoomOut(){
+  const cx=$('mapContainer').clientWidth/2, cy=$('mapContainer').clientHeight/2;
+  const nz=Math.max(.4,S.imgZoom/1.4);
+  S.offsetX=cx-(cx-S.offsetX)*(nz/S.imgZoom); S.offsetY=cy-(cy-S.offsetY)*(nz/S.imgZoom);
+  S.imgZoom=nz; applyT();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Side panel
 // ═══════════════════════════════════════════════════════════════════════════
-
-function openPanel() { sidePanel.classList.add('open'); backdrop.classList.add('show'); }
-function closePanel() { sidePanel.classList.remove('open'); backdrop.classList.remove('show'); }
+function openPanel(){ $('sidePanel').classList.add('open'); $('backdrop').classList.add('show'); }
+function closePanel(){ $('sidePanel').classList.remove('open'); $('backdrop').classList.remove('show'); }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Top bar auto-hide
 // ═══════════════════════════════════════════════════════════════════════════
-
-function showTopBar() { topBar.classList.remove('hidden'); resetHideTimer(); }
-function hideTopBar() { if (!sidePanel.classList.contains('open')) topBar.classList.add('hidden'); }
-function resetHideTimer() { clearTimeout(hideTimer); hideTimer = setTimeout(hideTopBar, 4000); }
+function showTopBar(){ $('topBar').classList.remove('hidden'); resetHideTimer(); }
+function hideTopBar(){ if(!$('sidePanel').classList.contains('open')) $('topBar').classList.add('hidden'); }
+function resetHideTimer(){ clearTimeout(hideTimer); hideTimer = setTimeout(hideTopBar, 4000); }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Global helpers
+// Helpers
 // ═══════════════════════════════════════════════════════════════════════════
+function resetView(){ S.imgZoom=1.5; centerMap(); showTopBar(); }
 
-function resetView() {
-  centerMap();
-  STATE.imgZoom = 1.5;
-  centerMap();
-  showTopBar();
-}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closePanel();
-  if (e.key === '+' || e.key === '=') zoomIn();
-  if (e.key === '-') zoomOut();
-  if (e.key === 'ArrowLeft') stepTime(1);
-  if (e.key === 'ArrowRight') stepTime(-1);
-  if (e.key === '0') resetView();
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closePanel();
+  if(e.key==='+'||e.key==='=') zoomIn();
+  if(e.key==='-') zoomOut();
+  if(e.key==='ArrowLeft') stepTime(1);
+  if(e.key==='ArrowRight') stepTime(-1);
+  if(e.key==='0') resetView();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════════════════
-
-async function init() {
-  await loadProducts();
-  centerMap();
-  resetHideTimer();
-  updateTimeLabels();
-  fetchImage();
-  startAutoRefresh();
+async function init(){
+  await loadCategories();
+  centerMap(); resetHideTimer(); updateTimeLabels();
+  fetchImage(); startAutoRefresh();
 }
-
 window.addEventListener('resize', centerMap);
 init();
 </script>
