@@ -138,6 +138,11 @@ def fetch_radar(
     # --- resolve time -------------------------------------------------------
     if year is None:
         now = round_to_mrms_window(datetime.now(timezone.utc))
+        # NOAA MRMS has ~2 min processing latency — the current 2-min
+        # window is usually blank because the data hasn't been generated
+        # yet.  Subtract 2 min to get the latest *available* tile.
+        from datetime import timedelta
+        now = now - timedelta(minutes=2)
         year, month, day = now.year, now.month, now.day
         hour, minute = now.hour, now.minute
 
