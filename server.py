@@ -10,7 +10,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import Response, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from mrms_core import fetch_radar, round_to_mrms_window
+from mrms_core import fetch_legend, fetch_radar, round_to_mrms_window
 
 # ---------------------------------------------------------------------------
 # App
@@ -224,9 +224,7 @@ async def get_radar(
         year, month, day = dt.year, dt.month, dt.day
         hour, minute = dt.hour, dt.minute
     else:
-        now = round_to_mrms_window(datetime.now(timezone.utc))
-        year, month, day = now.year, now.month, now.day
-        hour, minute = now.hour, now.minute
+        year = month = day = hour = minute = None
 
     img = fetch_radar(
         product=product, lat=lat, lon=lon, zoom=zoom,
@@ -254,6 +252,32 @@ async def get_radar(
             "Cache-Control": "public, max-age=120",
             "X-MRMS-Timestamp": img.timestamp,
             "X-MRMS-Cache": "hit" if img.from_cache else "miss",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# API: legend / colorbar
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/legend")
+async def get_legend(
+    product: str = Query("M3DL13", description="MRMS product code"),
+):
+    """Fetch the SVG colorbar legend for a product.
+
+    Returns ``image/svg+xml`` with a long cache lifetime.
+    """
+    svg = fetch_legend(product)
+    if svg is None:
+        return Response(status_code=404)
+
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={
+            "Cache-Control": "public, max-age=86400, immutable",
         },
     )
 

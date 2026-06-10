@@ -120,7 +120,7 @@ def test_fetch_with_size_flags():
 def test_fetch_with_time_flag():
     """--time ISO 8601 is parsed and passed to fetch_radar."""
     mock_response = MagicMock()
-    mock_response.content = b"historical_png"
+    mock_response.content = b"historical_png" + b"x" * 1024
 
     with tempfile.TemporaryDirectory() as tmpdir:
         with patch("mrms_core.CACHE_DIR", tmpdir):
@@ -144,7 +144,7 @@ def test_fetch_with_time_flag():
 def test_fetch_with_exact_time():
     """--time at exact MRMS window is not shifted."""
     mock_response = MagicMock()
-    mock_response.content = b"data"
+    mock_response.content = b"data" + b"x" * 1024
 
     with tempfile.TemporaryDirectory() as tmpdir:
         with patch("mrms_core.CACHE_DIR", tmpdir):
@@ -170,7 +170,7 @@ def test_fetch_shows_cached_when_from_cache():
         with patch("mrms_core.CACHE_DIR", tmpdir):
             with patch("mrms_core.requests.get") as mock_get:
                 mock_get.return_value = MagicMock()
-                mock_get.return_value.content = b"data"
+                mock_get.return_value.content = b"data" + b"x" * 1024
 
                 # First call — not cached
                 with patch("mrms_core._cache_load", return_value=None):
@@ -179,7 +179,7 @@ def test_fetch_shows_cached_when_from_cache():
                     assert "(cached)" not in result.output
 
                 # Second call — cached
-                with patch("mrms_core._cache_load", return_value=b"data"):
+                with patch("mrms_core._cache_load", return_value=b"data" + b"x" * 1024):
                     result = runner.invoke(cli, ["fetch", "--time", "2026-01-15T08:30"])
                     assert "(cached)" in result.output
 

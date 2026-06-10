@@ -134,7 +134,7 @@ def test_cache_load_miss():
 def test_fetch_radar_builds_correct_url():
     """fetch_radar constructs the URL and headers correctly without network."""
     mock_response = MagicMock()
-    mock_response.content = b"fake_png_data"
+    mock_response.content = b"fake_png_data" + b"x" * 1024
 
     with patch("mrms_core.requests.get", return_value=mock_response) as mock_get:
         with patch("mrms_core._cache_load", return_value=None):  # bypass cache
@@ -173,7 +173,7 @@ def test_fetch_radar_builds_correct_url():
 def test_fetch_radar_returns_radar_image():
     """fetch_radar returns a RadarImage with correct metadata."""
     mock_response = MagicMock()
-    mock_response.content = b"radar_png_bytes"
+    mock_response.content = b"radar_png_bytes" + b"x" * 1024
 
     with patch("mrms_core.requests.get", return_value=mock_response):
         with patch("mrms_core._cache_load", return_value=None):
@@ -186,7 +186,7 @@ def test_fetch_radar_returns_radar_image():
             )
 
     assert isinstance(result, RadarImage)
-    assert result.png_bytes == b"radar_png_bytes"
+    assert result.png_bytes == b"radar_png_bytes" + b"x" * 1024
     assert result.product == "BREF"
     assert result.lat == 35.0
     assert result.lon == -97.0
@@ -199,7 +199,7 @@ def test_fetch_radar_returns_radar_image():
 def test_fetch_radar_defaults():
     """fetch_radar with only required params uses sensible defaults."""
     mock_response = MagicMock()
-    mock_response.content = b"data"
+    mock_response.content = b"data" + b"x" * 1024
 
     with patch("mrms_core.requests.get", return_value=mock_response) as mock_get:
         with patch("mrms_core._cache_load", return_value=None):
@@ -218,7 +218,7 @@ def test_fetch_radar_uses_cache():
         with patch("mrms_core.CACHE_DIR", tmpdir):
             # First call — no cache, should hit network
             mock_response = MagicMock()
-            mock_response.content = b"fresh_data"
+            mock_response.content = b"fresh_data" + b"x" * 1024
 
             with patch("mrms_core.requests.get", return_value=mock_response) as mock_get:
                 result1 = fetch_radar(
@@ -234,7 +234,7 @@ def test_fetch_radar_uses_cache():
                     year=2026, month=6, day=6, hour=12, minute=0,
                 )
                 assert result2.from_cache is True
-                assert result2.png_bytes == b"fresh_data"
+                assert result2.png_bytes == b"fresh_data" + b"x" * 1024
                 assert mock_get.call_count == 1  # still 1, no extra call
 
 

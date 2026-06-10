@@ -24,6 +24,10 @@ RENDER_URL = (
     "https://mrms.nssl.noaa.gov/qvs/product_viewer/local/"
     "render_multi_domain_product_layer.php"
 )
+LEGEND_URL = (
+    "https://mrms.nssl.noaa.gov/qvs/product_viewer/shared/"
+    "fetch_svg_legend_via_config.php"
+)
 CPP_EXEC_DIR = "/home/metop/web/specific/opv/"
 WEB_RESOURCES_DIR = "/var/www/html/qvs/product_viewer/resources/"
 REFERER = "https://mrms.nssl.noaa.gov/qvs/product_viewer/index.php"
@@ -140,77 +144,106 @@ def fetch_radar(
         now = round_to_mrms_window(datetime.now(timezone.utc))
         # NOAA MRMS has ~2 min processing latency — the current 2-min
         # window is usually blank because the data hasn't been generated
-        # yet.  Subtract 2 min to get the latest *available* tile.
+        # yet.  Subtract 4 min to get the latest *available* tile.
         from datetime import timedelta
-        now = now - timedelta(minutes=2)
+        now = now - timedelta(minutes=4)
         year, month, day = now.year, now.month, now.day
         hour, minute = now.hour, now.minute
 
-    # --- check cache --------------------------------------------------------
-    # (year/month/day/hour/minute are guaranteed ints after the block above;
-    #  help the type checker see that.)
-    assert year is not None
-    assert month is not None
-    assert day is not None
-    assert hour is not None
-    assert minute is not None
-    key = _cache_key(product, year, month, day, hour, minute,
-                     lat, lon, zoom, width, height)
-    cached = _cache_load(key)
-    if cached is not None:
-        return RadarImage(
-            png_bytes=cached,
-            product=product,
-            lat=lat,
-            lon=lon,
-            zoom=zoom,
-            width=width,
-            height=height,
-            timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",
-            fetch_time=datetime.now(timezone.utc).isoformat(),
-            from_cache=True,
-        )
-
     # --- fetch from NOAA ----------------------------------------------------
-    params = {
-        "mode": "run",
-        "cpp_exec_dir": CPP_EXEC_DIR,
-        "web_resources_dir": WEB_RESOURCES_DIR,
-        "prod_root": product,
-        "qperate_pal_option": 0,
-        "qpe_pal_option": 0,
-        "year": year,
-        "month": month,
-        "day": day,
-        "hour": hour,
-        "minute": minute,
-        "clon": lon,
-        "clat": lat,
-        "zoom": zoom,
-        "width": width,
-        "height": height,
-    }
+    from datetime import timedelta
 
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": REFERER,
-    }
+    for attempt in range(6):
+        # Check cache for current timestamp
+        assert year is not None
+        assert month is not None
+        assert day is not None
+        assert hour is not None
+        assert minute is not None
+        key = _cache_key(product, year, month, day, hour, minute,
+                         lat, lon, zoom, width, height)
+        cached = _cache_load(key)
+        if cached is not None:
+            # Check if cached image is blank
+            if len(cached) >= 1024:
+                return RadarImage(
+                    png_bytes=cached,
+                    product=product,
+                    lat=lat,
+                    lon=lon,
+                    zoom=zoom,
+                    width=width,
+                    height=height,
+                    timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",
+                    fetch_time=datetime.now(timezone.utc).isoformat(),
+                    from_cache=True,
+                )
 
-    fetch_time = datetime.now(timezone.utc)
+        # Fetch from NOAA
+        params = {
+            "mode": "run",
+            "cpp_exec_dir": CPP_EXEC_DIR,
+            "web_resources_dir": WEB_RESOURCES_DIR,
+            "prod_root": product,
+            "qperate_pal_option": 0,
+            "qpe_pal_option": 0,
+            "year": year,
+            "month": month,
+            "day": day,
+            "hour": hour,
+            "minute": minute,
+            "clon": lon,
+            "clat": lat,
+            "zoom": zoom,
+            "width": width,
+            "height": height,
+        }
 
-    r = requests.get(
-        RENDER_URL, params=params, headers=headers, timeout=30, verify=False
-    )
-    r.raise_for_status()
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": REFERER,
+        }
 
-    # Save to cache
+        fetch_time = datetime.now(timezone.utc)
+
+        r = requests.get(
+            RENDER_URL, params=params, headers=headers, timeout=30, verify=False
+        )
+        r.raise_for_status()
+
+        # Check if PNG is blank (transparent PNGs <1KB are typically empty)
+        if len(r.content) >= 1024:
+            # Save to cache and return
+            _cache_save(key, r.content)
+
+            # Resolve the actual URL that was fetched (for debugging).
+            req = getattr(r, "request", None)
+            source_url = req.url if req is not None else ""
+
+            return RadarImage(
+                png_bytes=r.content,
+                product=product,
+                lat=lat,
+                lon=lon,
+                zoom=zoom,
+                width=width,
+                height=height,
+                timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",
+                fetch_time=fetch_time.isoformat(),
+                source_url=source_url,
+                from_cache=False,
+            )
+
+        # Step back 2 minutes and retry
+        dt = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+        dt = dt - timedelta(minutes=2)
+        year, month, day = dt.year, dt.month, dt.day
+        hour, minute = dt.hour, dt.minute
+
+    # All attempts failed — return the last (blank) image
     _cache_save(key, r.content)
-
-    # Resolve the actual URL that was fetched (for debugging).
-    # r.request may be None (e.g. redirects); fall back to empty string.
     req = getattr(r, "request", None)
     source_url = req.url if req is not None else ""
-
     return RadarImage(
         png_bytes=r.content,
         product=product,
@@ -224,3 +257,41 @@ def fetch_radar(
         source_url=source_url,
         from_cache=False,
     )
+
+
+def fetch_legend(product: str) -> str | None:
+    """Fetch the SVG colorbar legend for a given MRMS product.
+
+    Returns the raw SVG string, or ``None`` if the legend is unavailable.
+    Legends are cached on disk since they never change per product.
+    """
+    cache_key = f"legend_{product}.svg"
+    cached = _cache_load(cache_key)
+    if cached is not None:
+        return cached.decode("utf-8")
+
+    params = {
+        "web_resources_dir": WEB_RESOURCES_DIR,
+        "config_name": "title_and_legend_config.txt",
+        "product": product,
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": REFERER,
+    }
+
+    try:
+        r = requests.get(
+            LEGEND_URL, params=params, headers=headers, timeout=15, verify=False
+        )
+        r.raise_for_status()
+    except Exception:
+        return None
+
+    svg = r.text
+    if not svg or "<svg" not in svg:
+        return None
+
+    _cache_save(cache_key, svg.encode("utf-8"))
+    return svg
