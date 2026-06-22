@@ -40,22 +40,30 @@ Output is saved as `radar_YYYYMMDD_HHMMSS.png` (or your chosen path). Repeated r
 | `--zoom`, `-z` | `7` | Leaflet zoom (3=continent, 7=state, 10=city) |
 | `--width`, `-W` | `920` | Image width (px) |
 | `--height`, `-H` | `630` | Image height (px) |
-| `--time`, `-t` | now | ISO 8601 timestamp (rounded to 2-min MRMS window) |
+| `--time`, `-t` | now | ISO 8601 timestamp (rounded to product-specific resolution, e.g. 2, 5, or 60 min) |
 | `--output`, `-o` | auto | Output file path |
 
-## Products
+~200 products across 20 categories. You can query all available categories and product codes directly using the CLI:
 
-~200 products across 20 categories. Common ones:
+```bash
+# List all 20 categories
+mrms products
 
-| Code | Description |
-|------|-------------|
-| `M3DL13` | 3D Reflectivity at 4.0 km (default) |
-| `BREF` | Base Reflectivity |
-| `CREF` | Composite Reflectivity |
-| `SHSR` | Seamless Hybrid Scan Reflectivity |
-| `RALA` | Reflectivity at Lowest Altitude |
+# List all specific product codes under a category (e.g. brefls or level)
+mrms products --category brefls
+```
 
-See `PLAN.md` for the full product catalog.
+The catalog metadata is loaded dynamically from [mrms_products.json](file:///Users/java1127/onedrive/Projects/radar_app/mrms_products.json). Common ones include:
+
+| Code | Description | Time Cycle |
+|------|-------------|------------|
+| `M3DL13` | 3D Reflectivity at 4.0 km (default) | 2 min |
+| `BREF` | Base Reflectivity (Alias for `BASE_REFL`) | 2 min |
+| `CREF` | Composite Reflectivity | 2 min |
+| `SHSR` | Seamless Hybrid Scan Reflectivity | 2 min |
+| `RALA` | Reflectivity at Lowest Altitude | 2 min |
+| `MZDRL13` | ZDR 3D Mosaic at 4.0 km | 5 min |
+| `MRHOL13` | RhoHV 3D Mosaic at 4.0 km | 5 min |
 
 ## How it works
 
@@ -63,17 +71,19 @@ Fetches rendered PNGs from NOAA's MRMS Operational Product Viewer render endpoin
 (`render_multi_domain_product_layer.php`). Images are cached locally in `cache/`
 — repeated requests for the same product, location, and time are instant.
 
-MRMS data is generated every 2 minutes. The CLI rounds timestamps down to the
-nearest even minute to hit existing tiles (:00, :02, :04, ...).
+Product cycles vary (e.g. 2, 5, or 60 minutes). The CLI queries [mrms_products.json](file:///Users/java1127/onedrive/Projects/radar_app/mrms_products.json) to dynamically round the requested time to the correct resolution boundary for that specific product.
 
 ## Architecture
 
 ```
-mrms_core.py    ← shared library: fetch_radar(), cache, data model
-mrms_cli.py     ← click CLI (thin wrapper around mrms_core)
+mrms_products.json ← centralized product categories and resolution database
+mrms_core.py       ← shared library: loads catalog, fetch_radar(), cache, data model
+mrms_cli.py        ← click CLI (thin wrapper around mrms_core, validation & listing)
+server.py          ← FastAPI web server + dynamically populated JSON API
+static/            ← Leaflet PWA frontend (index.html, responsive layout, loop player)
 ```
 
-Both the CLI and future web app import `mrms_core` — no code duplication.
+All components load and resolve products dynamically using the catalog registry in `mrms_core.py` to prevent duplicate structures.
 
 ## Tests
 

@@ -194,3 +194,21 @@ def test_fetch_invalid_time():
     runner = CliRunner()
     result = runner.invoke(cli, ["fetch", "--time", "not-a-date"])
     assert result.exit_code != 0
+
+
+# ============================================================================
+# Products Command
+# ============================================================================
+
+
+def test_cli_products():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["products"])
+    assert result.exit_code == 0
+    assert "Base Reflectivity" in result.output
+    assert "3D Mosaic Levels" in result.output
+
+    # Test filtering by category code
+    result_filter = runner.invoke(cli, ["products", "--category", "brefls"])
+    assert result_filter.exit_code == 0
+    assert "BASE_REFL" in result_filter.output

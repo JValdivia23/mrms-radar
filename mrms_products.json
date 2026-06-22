@@ -1,0 +1,1332 @@
+[
+  {
+    "code": "brefls",
+    "name": "Base Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "BASE_REFL",
+        "name": "BREF",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BREF_HR_MAX",
+        "name": "1 hr Max",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "UNQC_BREF",
+        "name": "BREF - Un-QC'ed",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "crefls",
+    "name": "Composite Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "CREF",
+        "name": "CREF",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREF_MAX",
+        "name": "Max Method",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREF_HR_MAX",
+        "name": "1 hr Max",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "UNQC_CREF",
+        "name": "Un-QC'ed",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREFH",
+        "name": "Height",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "shsrs",
+    "name": "Seamless Hybrid Scan",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "SHSR",
+        "name": "SHSR",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "SHSRH",
+        "name": "SHSR - Height",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "ralas",
+    "name": "Refl At Lowest Altitude",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "RALA",
+        "name": "RALA",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "UNQC_RALA",
+        "name": "Un-QC'ed",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "layer",
+    "name": "Layer Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "LCR_ANC",
+        "name": "Layer Refl [ANC]",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCREF",
+        "name": "Low Comp [0-4 km]",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_LOW",
+        "name": "Low (0 - 24 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_HIGH",
+        "name": "High (24 - 60 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_SUPER",
+        "name": "Super (33 kft - 60 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_0C",
+        "name": "Const Temp: 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-5C",
+        "name": "Const Temp: -5 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-10C",
+        "name": "Const Temp: -10 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-15C",
+        "name": "Const Temp: -15 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-20C",
+        "name": "Const Temp: -20 C",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "rads",
+    "name": "Echo Top",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "ETP18",
+        "name": "18 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP30",
+        "name": "30 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50",
+        "name": "50 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60",
+        "name": "60 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP18KFT",
+        "name": "18 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP30KFT",
+        "name": "30 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50KFT",
+        "name": "50 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60KFT",
+        "name": "60 dBZ(kft)",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "thick",
+    "name": "Layer Thickness",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "ETP50_0C",
+        "name": "50 dBZ above 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50_-20C",
+        "name": "50 dBZ above -20 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60_0C",
+        "name": "60 dBZ above 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60_-20C",
+        "name": "60 dBZ above -20 C",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "level",
+    "name": "3D Mosaic Levels",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "M3DL1",
+        "name": "0.5 km",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL2",
+        "name": "0.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL3",
+        "name": "1.00",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL4",
+        "name": "1.25",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL5",
+        "name": "1.50",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL6",
+        "name": "1.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL7",
+        "name": "2.00",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL8",
+        "name": "2.25",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL9",
+        "name": "2.50",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL10",
+        "name": "2.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL11",
+        "name": "3.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL12",
+        "name": "3.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL13",
+        "name": "4.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL14",
+        "name": "4.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL15",
+        "name": "5.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL16",
+        "name": "5.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL17",
+        "name": "6.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL18",
+        "name": "6.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL19",
+        "name": "7.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL20",
+        "name": "7.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL21",
+        "name": "8.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL22",
+        "name": "8.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL23",
+        "name": "9.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL24",
+        "name": "10",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL25",
+        "name": "11",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL26",
+        "name": "12",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL27",
+        "name": "13",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL28",
+        "name": "14",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL29",
+        "name": "15",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL30",
+        "name": "16",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL31",
+        "name": "17",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL32",
+        "name": "18",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL33",
+        "name": "19",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "zdr",
+    "name": "ZDR - 3D Mosaic",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "MZDRL1",
+        "name": "0.5 km",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL2",
+        "name": "0.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL3",
+        "name": "1.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL4",
+        "name": "1.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL5",
+        "name": "1.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL6",
+        "name": "1.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL7",
+        "name": "2.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL8",
+        "name": "2.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL9",
+        "name": "2.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL10",
+        "name": "2.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL11",
+        "name": "3.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL12",
+        "name": "3.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL13",
+        "name": "4.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL14",
+        "name": "4.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL15",
+        "name": "5.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL16",
+        "name": "5.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL17",
+        "name": "6.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL18",
+        "name": "6.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL19",
+        "name": "7.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL20",
+        "name": "7.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL21",
+        "name": "8.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL22",
+        "name": "8.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL23",
+        "name": "9.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL24",
+        "name": "10",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL25",
+        "name": "11",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL26",
+        "name": "12",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL27",
+        "name": "13",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL28",
+        "name": "14",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL29",
+        "name": "15",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL30",
+        "name": "16",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL31",
+        "name": "17",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL32",
+        "name": "18",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL33",
+        "name": "19",
+        "min_res_minutes": 5
+      }
+    ]
+  },
+  {
+    "code": "rhohv",
+    "name": "RhoHV - 3D Mosaic",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "MRHOL1",
+        "name": "0.5 km",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL2",
+        "name": "0.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL3",
+        "name": "1.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL4",
+        "name": "1.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL5",
+        "name": "1.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL6",
+        "name": "1.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL7",
+        "name": "2.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL8",
+        "name": "2.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL9",
+        "name": "2.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL10",
+        "name": "2.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL11",
+        "name": "3.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL12",
+        "name": "3.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL13",
+        "name": "4.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL14",
+        "name": "4.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL15",
+        "name": "5.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL16",
+        "name": "5.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL17",
+        "name": "6.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL18",
+        "name": "6.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL19",
+        "name": "7.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL20",
+        "name": "7.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL21",
+        "name": "8.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL22",
+        "name": "8.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL23",
+        "name": "9.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL24",
+        "name": "10",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL25",
+        "name": "11",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL26",
+        "name": "12",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL27",
+        "name": "13",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL28",
+        "name": "14",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL29",
+        "name": "15",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL30",
+        "name": "16",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL31",
+        "name": "17",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL32",
+        "name": "18",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL33",
+        "name": "19",
+        "min_res_minutes": 5
+      }
+    ]
+  },
+  {
+    "code": "rqis",
+    "name": "Radar Quality Index",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "RQI",
+        "name": "RQI",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RAQI_1H",
+        "name": "QPE RQI - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_3H",
+        "name": "QPE RQI - 3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_6H",
+        "name": "QPE RQI - 6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_12H",
+        "name": "QPE RQI - 12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_24H",
+        "name": "QPE RQI - 24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_48H",
+        "name": "QPE RQI - 48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_72H",
+        "name": "QPE RQI - 72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "azsh",
+    "name": "Rotation",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "AZ_SHEAR",
+        "name": "Low Level - Instant",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT30M",
+        "name": "Low Level - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT60M",
+        "name": "Low Level - 1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT120M",
+        "name": "Low Level - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT240M",
+        "name": "Low Level - 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT360M",
+        "name": "Low Level - 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT1440M",
+        "name": "Low Level - 24 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "AZ_SHEAR_ML",
+        "name": "Mid Level - Instant",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML30M",
+        "name": "Mid Level - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML60M",
+        "name": "Mid Level - 1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML120M",
+        "name": "Mid Level - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML240M",
+        "name": "Mid Level - 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML360M",
+        "name": "Mid Level - 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML1440M",
+        "name": "Mid Level - 24 hr",
+        "min_res_minutes": 30
+      }
+    ]
+  },
+  {
+    "code": "hails",
+    "name": "Hail/Lightning",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "SHI",
+        "name": "Severe Hail Index",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "POSH",
+        "name": "Prob of Severe Hail",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESH",
+        "name": "Max Exp Hail Size",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX30M",
+        "name": "Hail Swath 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX60M",
+        "name": "Hail Swath 1hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX120M",
+        "name": "Hail Swath 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX240M",
+        "name": "Hail Swath 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX360M",
+        "name": "Hail Swath 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX1440M",
+        "name": "Hail Swath 24 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "LTGPROB30M",
+        "name": "Probability - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LTGPROB60M",
+        "name": "Probability - 60 min",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "precips",
+    "name": "Gauge Influence Index",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "P1_GII_1H",
+        "name": "Pass1 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_1H",
+        "name": "Pass2 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "flash",
+    "name": "FLASH",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "FL_CREST_USF",
+        "name": "CREST Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_CREST_SF",
+        "name": "CREST Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_CREST_SS",
+        "name": "CREST Soil Sat",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_USF",
+        "name": "SAC Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_SF",
+        "name": "SAC Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_SS",
+        "name": "SAC Soil Sat",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_HP_USF",
+        "name": "Hydrophobic Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_HP_SF",
+        "name": "Hydrophobic Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_ARI30M",
+        "name": "Recur Interval (30 min)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI1H",
+        "name": "Recur Interval (1 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI3H",
+        "name": "Recur Interval (3 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI6H",
+        "name": "Recur Interval (6 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI12H",
+        "name": "Recur Interval (12 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI24H",
+        "name": "Recur Interval (24 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARIMAX",
+        "name": "Recur Interval (max)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG1H",
+        "name": "QPE/FFG Ratio (1 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG3H",
+        "name": "QPE/FFG Ratio (3 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG6H",
+        "name": "QPE/FFG Ratio (6 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFGMAX",
+        "name": "QPE/FFG Ratio (max)",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "q3rads",
+    "name": "Q3 Radar Only",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "Q3EVAPRATE",
+        "name": "Rate",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "Q3EVAP15M",
+        "name": "15 min",
+        "min_res_minutes": 15
+      },
+      {
+        "code": "Q3EVAP1H",
+        "name": "1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "Q3EVAP3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "q3mss",
+    "name": "Q3 Multi-Sensor",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "P1_Q3MS1H",
+        "name": "Pass1 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS1H",
+        "name": "Pass2 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "waters",
+    "name": "Vertically Integrated Water",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "VIL",
+        "name": "Vert Integrated Liquid",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VILD",
+        "name": "VIL Density",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VII",
+        "name": "Vert Integrated Ice",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VIL_SWATH_0120M",
+        "name": "VIL Swath - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "VIL_SWATH_1440M",
+        "name": "VIL Swath - 24 hr",
+        "min_res_minutes": 30
+      }
+    ]
+  },
+  {
+    "code": "pcpflag_bb",
+    "name": "Precipitation Flag/Bright Band",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "PCP_FLAG",
+        "name": "Precipitation Flag",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BBTOP",
+        "name": "Bright Band Top",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BBBOTTOM",
+        "name": "Bright Band Bottom",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "models",
+    "name": "Model",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "MOD_TSFC",
+        "name": "Surface Temp (2M)",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_WBT",
+        "name": "Wet Bulb Temp",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_HGT0C",
+        "name": "Freezing Height",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_TP",
+        "name": "Tropical Rain Prob",
+        "min_res_minutes": 60
+      }
+    ]
+  }
+]

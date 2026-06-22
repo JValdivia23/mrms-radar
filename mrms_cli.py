@@ -10,7 +10,7 @@ Usage:
 import click
 from datetime import datetime
 
-from mrms_core import fetch_radar, round_to_mrms_window
+from mrms_core import fetch_radar, round_to_mrms_window, PRODUCT_CATALOG, get_product_metadata
 
 
 @click.group()
@@ -81,10 +81,27 @@ def fetch(product, lat, lon, zoom, width, height, time, output):
       mrms fetch --time 2026-01-15T08:30 -o storm.png
       mrms fetch --width 1200 --height 800
     """
+    # Validate product
+    meta = get_product_metadata(product)
+    if meta is None:
+        import difflib
+        all_codes = []
+        for category in PRODUCT_CATALOG:
+            for p in category.get("products", []):
+                all_codes.append(p.get("code"))
+        matches = difflib.get_close_matches(product, all_codes, n=3, cutoff=0.5)
+        
+        click.echo(f"Warning: '{product}' is not recognized in the product catalog.", err=True)
+        if matches:
+            click.echo(f"Did you mean one of these? {', '.join(matches)}", err=True)
+        else:
+            click.echo("Use 'python mrms_cli.py products' to list all recognized codes.", err=True)
+
     # Resolve time
     if time is not None:
         dt = datetime.fromisoformat(time)
-        dt = round_to_mrms_window(dt)
+        res_mins = meta["min_res_minutes"] if meta else 2
+        dt = round_to_mrms_window(dt, res_mins)
         year, month, day = dt.year, dt.month, dt.day
         hour, minute = dt.hour, dt.minute
         img = fetch_radar(
@@ -116,6 +133,32 @@ def fetch(product, lat, lon, zoom, width, height, time, output):
         f"({len(img.png_bytes):,} bytes, {img.width}\u00d7{img.height})"
         f"{cache_tag}"
     )
+
+
+@cli.command()
+@click.option(
+    "--category", "-c",
+    default=None,
+    help="Filter products by category code or name.",
+)
+def products(category):
+    """List all available MRMS categories and product codes."""
+    if category:
+        cat_lower = category.lower()
+        found = False
+        for cat in PRODUCT_CATALOG:
+            if cat_lower in (cat["code"].lower(), cat["name"].lower()):
+                found = True
+                click.echo(f"\n{cat['name']} ({cat['code']}):")
+                for p in cat["products"]:
+                    click.echo(f"  {p['code']:15} - {p['name']} ({p['min_res_minutes']} min res)")
+        if not found:
+            click.echo(f"Category '{category}' not found.", err=True)
+    else:
+        click.echo("MRMS Categories:")
+        for cat in PRODUCT_CATALOG:
+            click.echo(f"- {cat['code']:12} : {cat['name']}")
+        click.echo("\nUse '--category <name>' to list all specific product codes under a category.")
 
 
 if __name__ == "__main__":

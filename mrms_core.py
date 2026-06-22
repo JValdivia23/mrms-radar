@@ -35,6 +35,36 @@ REFERER = "https://mrms.nssl.noaa.gov/qvs/product_viewer/index.php"
 # Cache directory — relative to this file, gitignored
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 
+import json
+
+# Product Catalog
+PRODUCTS_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mrms_products.json")
+
+def _load_products_catalog() -> list:
+    try:
+        with open(PRODUCTS_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+PRODUCT_CATALOG = _load_products_catalog()
+
+def get_product_metadata(product_code: str) -> dict | None:
+    """Find a product by its code in the catalog and return its details."""
+    for category in PRODUCT_CATALOG:
+        for product in category.get("products", []):
+            if product.get("code") == product_code:
+                return {
+                    "code": product.get("code"),
+                    "name": product.get("name"),
+                    "min_res_minutes": product.get("min_res_minutes", 2),
+                    "category_code": category.get("code"),
+                    "category_name": category.get("name"),
+                    "has_levels": category.get("has_levels", False),
+                }
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -63,13 +93,11 @@ class RadarImage:
 # ---------------------------------------------------------------------------
 
 
-def round_to_mrms_window(dt: datetime) -> datetime:
-    """Round a datetime down to the nearest 2-minute MRMS window.
-
-    MRMS data is generated every 2 minutes (:00, :02, :04, ..., :58).
-    """
-    minute = (dt.minute // 2) * 2
+def round_to_mrms_window(dt: datetime, resolution_mins: int = 2) -> datetime:
+    """Round a datetime down to the nearest MRMS window for the given resolution."""
+    minute = (dt.minute // resolution_mins) * resolution_mins
     return dt.replace(minute=minute, second=0, microsecond=0)
+
 
 
 # ---------------------------------------------------------------------------
@@ -141,14 +169,16 @@ def fetch_radar(
     """
     # --- resolve time -------------------------------------------------------
     if year is None:
-        now = round_to_mrms_window(datetime.now(timezone.utc))
-        # NOAA MRMS has ~2 min processing latency — the current 2-min
-        # window is usually blank because the data hasn't been generated
-        # yet.  Subtract 4 min to get the latest *available* tile.
+        meta = get_product_metadata(product)
+        res_mins = meta["min_res_minutes"] if meta else 2
+        now = round_to_mrms_window(datetime.now(timezone.utc), res_mins)
+        # NOAA MRMS has processing latency — adjust back by at least one cycle
         from datetime import timedelta
-        now = now - timedelta(minutes=4)
+        latency_mins = max(4, res_mins * 2)
+        now = now - timedelta(minutes=latency_mins)
         year, month, day = now.year, now.month, now.day
         hour, minute = now.hour, now.minute
+
 
     # --- fetch from NOAA ----------------------------------------------------
     from datetime import timedelta

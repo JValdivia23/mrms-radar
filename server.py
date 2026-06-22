@@ -12,7 +12,7 @@ from fastapi.responses import Response, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from timezonefinder import TimezoneFinder
 
-from mrms_core import fetch_legend, fetch_radar, round_to_mrms_window
+from mrms_core import fetch_legend, fetch_radar, round_to_mrms_window, PRODUCT_CATALOG, get_product_metadata
 
 # ---------------------------------------------------------------------------
 # App
@@ -27,170 +27,7 @@ STATIC = Path(__file__).parent / "static"
 # API: products (hierarchical — category → products)
 # ---------------------------------------------------------------------------
 
-CATEGORIES = [
-    {
-        "code": "level",
-        "name": "3D Reflectivity",
-        "default_product": "M3DL13",
-        "products": [
-            {"code": "M3DL1",  "name": "0.5 km"},
-            {"code": "M3DL2",  "name": "0.75 km"},
-            {"code": "M3DL3",  "name": "1.0 km"},
-            {"code": "M3DL4",  "name": "1.25 km"},
-            {"code": "M3DL5",  "name": "1.5 km"},
-            {"code": "M3DL6",  "name": "1.75 km"},
-            {"code": "M3DL7",  "name": "2.0 km"},
-            {"code": "M3DL8",  "name": "2.25 km"},
-            {"code": "M3DL9",  "name": "2.5 km"},
-            {"code": "M3DL10", "name": "2.75 km"},
-            {"code": "M3DL11", "name": "3.0 km"},
-            {"code": "M3DL12", "name": "3.5 km"},
-            {"code": "M3DL13", "name": "4.0 km"},
-            {"code": "M3DL14", "name": "4.5 km"},
-            {"code": "M3DL15", "name": "5.0 km"},
-            {"code": "M3DL16", "name": "5.5 km"},
-            {"code": "M3DL17", "name": "6.0 km"},
-            {"code": "M3DL18", "name": "6.5 km"},
-            {"code": "M3DL19", "name": "7.0 km"},
-            {"code": "M3DL20", "name": "7.5 km"},
-            {"code": "M3DL21", "name": "8.0 km"},
-            {"code": "M3DL22", "name": "8.5 km"},
-            {"code": "M3DL23", "name": "9.0 km"},
-            {"code": "M3DL24", "name": "11 km"},
-            {"code": "M3DL25", "name": "12 km"},
-            {"code": "M3DL26", "name": "13 km"},
-            {"code": "M3DL27", "name": "14 km"},
-            {"code": "M3DL28", "name": "15 km"},
-            {"code": "M3DL29", "name": "16 km"},
-            {"code": "M3DL30", "name": "17 km"},
-            {"code": "M3DL31", "name": "18 km"},
-            {"code": "M3DL32", "name": "19 km"},
-            {"code": "M3DL33", "name": "19+ km"},
-        ],
-        "has_levels": True,
-        "level_suffix": "km",
-    },
-    {
-        "code": "zdr",
-        "name": "Differential Reflectivity (ZDR)",
-        "default_product": "MZDRL13",
-        "products": [
-            {"code": "MZDRL1",  "name": "0.5 km"},
-            {"code": "MZDRL3",  "name": "1.0 km"},
-            {"code": "MZDRL5",  "name": "1.5 km"},
-            {"code": "MZDRL7",  "name": "2.0 km"},
-            {"code": "MZDRL9",  "name": "2.5 km"},
-            {"code": "MZDRL11", "name": "3.0 km"},
-            {"code": "MZDRL13", "name": "4.0 km"},
-            {"code": "MZDRL15", "name": "5.0 km"},
-            {"code": "MZDRL17", "name": "6.0 km"},
-            {"code": "MZDRL19", "name": "7.0 km"},
-            {"code": "MZDRL21", "name": "8.0 km"},
-            {"code": "MZDRL23", "name": "9.0 km"},
-            {"code": "MZDRL25", "name": "12 km"},
-            {"code": "MZDRL27", "name": "14 km"},
-            {"code": "MZDRL29", "name": "16 km"},
-            {"code": "MZDRL31", "name": "18 km"},
-            {"code": "MZDRL33", "name": "19+ km"},
-        ],
-        "has_levels": True,
-        "level_suffix": "km",
-    },
-    {
-        "code": "rhohv",
-        "name": "Correlation Coefficient (RhoHV)",
-        "default_product": "MRHOL13",
-        "products": [
-            {"code": "MRHOL1",  "name": "0.5 km"},
-            {"code": "MRHOL3",  "name": "1.0 km"},
-            {"code": "MRHOL5",  "name": "1.5 km"},
-            {"code": "MRHOL7",  "name": "2.0 km"},
-            {"code": "MRHOL9",  "name": "2.5 km"},
-            {"code": "MRHOL11", "name": "3.0 km"},
-            {"code": "MRHOL13", "name": "4.0 km"},
-            {"code": "MRHOL15", "name": "5.0 km"},
-            {"code": "MRHOL17", "name": "6.0 km"},
-            {"code": "MRHOL19", "name": "7.0 km"},
-            {"code": "MRHOL21", "name": "8.0 km"},
-            {"code": "MRHOL23", "name": "9.0 km"},
-            {"code": "MRHOL25", "name": "12 km"},
-            {"code": "MRHOL27", "name": "14 km"},
-            {"code": "MRHOL29", "name": "16 km"},
-            {"code": "MRHOL31", "name": "18 km"},
-            {"code": "MRHOL33", "name": "19+ km"},
-        ],
-        "has_levels": True,
-        "level_suffix": "km",
-    },
-    {
-        "code": "brefls",
-        "name": "Base Reflectivity",
-        "default_product": "BREF",
-        "products": [
-            {"code": "BREF", "name": "Base Reflectivity"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "crefls",
-        "name": "Composite Reflectivity",
-        "default_product": "CREF",
-        "products": [
-            {"code": "CREF", "name": "Composite Reflectivity"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "shsrs",
-        "name": "Seamless Hybrid Scan",
-        "default_product": "SHSR",
-        "products": [
-            {"code": "SHSR", "name": "SHSR Reflectivity"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "ralas",
-        "name": "Refl at Lowest Altitude",
-        "default_product": "RALA",
-        "products": [
-            {"code": "RALA", "name": "RALA Reflectivity"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "hails",
-        "name": "Hail Products",
-        "default_product": "MESH",
-        "products": [
-            {"code": "SHI",  "name": "Severe Hail Index"},
-            {"code": "POSH", "name": "Prob of Severe Hail"},
-            {"code": "MESH", "name": "Max Est Size of Hail"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "waters",
-        "name": "Vert Integrated Water",
-        "default_product": "VIL",
-        "products": [
-            {"code": "VIL",  "name": "Vert Integrated Liquid"},
-            {"code": "VII",  "name": "Vert Integrated Ice"},
-        ],
-        "has_levels": False,
-    },
-    {
-        "code": "rads",
-        "name": "Echo Tops",
-        "default_product": "ET18",
-        "products": [
-            {"code": "ET18", "name": "Echo Top 18 dBZ"},
-            {"code": "ET30", "name": "Echo Top 30 dBZ"},
-            {"code": "ET50", "name": "Echo Top 50 dBZ"},
-        ],
-        "has_levels": False,
-    },
-]
+CATEGORIES = PRODUCT_CATALOG
 
 
 @app.get("/api/products")
@@ -222,7 +59,9 @@ async def get_radar(
     # Resolve time
     if time is not None:
         dt = datetime.fromisoformat(time)
-        dt = round_to_mrms_window(dt)
+        meta = get_product_metadata(product)
+        res_mins = meta["min_res_minutes"] if meta else 2
+        dt = round_to_mrms_window(dt, res_mins)
         year, month, day = dt.year, dt.month, dt.day
         hour, minute = dt.hour, dt.minute
     else:
