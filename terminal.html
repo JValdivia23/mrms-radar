@@ -216,7 +216,7 @@
             document.getElementById('status-text').innerText = "Installing Pyodide packages...";
             term.writeln("Installing core dependencies (click, pyodide-http)...");
             
-            await pyodide.loadPackage(["micropip"]);
+            await pyodide.loadPackage(["requests", "micropip"]);
             const micropip = pyodide.pyimport("micropip");
             await micropip.install("click");
             await micropip.install("pyodide-http");
