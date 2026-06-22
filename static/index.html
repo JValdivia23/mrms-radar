@@ -267,6 +267,109 @@
     .level-value{font-size:20px}
     .colorbar{right:44px;width:28px;height:180px;top:50%;transform:translateY(-50%)}
   }
+
+  /* ── Terminal Panel ── */
+  .terminal-panel {
+    position: fixed;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 120px);
+    right: 12px;
+    width: min(500px, 90vw);
+    height: 300px;
+    background: rgba(10, 12, 16, 0.95);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .terminal-panel.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .terminal-header {
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--panel-border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .terminal-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .terminal-title .status-dot {
+    width: 6px;
+    height: 6px;
+    background-color: var(--danger);
+    border-radius: 50%;
+  }
+  .terminal-title .status-dot.ready {
+    background-color: #58a6ff;
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.6);
+  }
+  .terminal-title .status-dot.loading {
+    background-color: #f0c674;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  .terminal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s;
+  }
+  .terminal-close:hover {
+    color: var(--text);
+  }
+  #terminal-body {
+    flex: 1;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .terminal-toggle-btn {
+    position: fixed;
+    right: 12px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    color: var(--text);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: background 0.15s;
+  }
+  .terminal-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
 </style>
 </head>
 <body>
@@ -394,6 +497,20 @@
     <button class="time-nav now-btn" id="livePauseBtn" onclick="toggleLivePause()">⏸</button>
     <button class="time-nav now-btn" onclick="goLive()">NOW</button>
   </div>
+</div>
+
+
+<!-- Terminal Panel Overlay -->
+<button class="terminal-toggle-btn" id="terminalToggleBtn" onclick="toggleTerminal()" title="Toggle Console">>_</button>
+<div class="terminal-panel" id="terminalPanel">
+  <div class="terminal-header">
+    <div class="terminal-title">
+      <div class="status-dot" id="terminalStatusDot"></div>
+      <span id="terminalStatusText">Console</span>
+    </div>
+    <button class="terminal-close" onclick="toggleTerminal()">✕</button>
+  </div>
+  <div id="terminal-body"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1006,6 +1123,1728 @@ $('opacitySlider').oninput = ()=>{
 $('baseMapSelect').onchange = ()=>{
   switchBaseMap($('baseMapSelect').value);
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Standalone CORS Proxy & API Interceptors (Serverless Mode)
+// ═══════════════════════════════════════════════════════════════════════════
+const categoriesCatalog = [
+  {
+    "code": "brefls",
+    "name": "Base Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "BASE_REFL",
+        "name": "BREF",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BREF_HR_MAX",
+        "name": "1 hr Max",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "UNQC_BREF",
+        "name": "BREF - Un-QC'ed",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "crefls",
+    "name": "Composite Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "CREF",
+        "name": "CREF",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREF_MAX",
+        "name": "Max Method",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREF_HR_MAX",
+        "name": "1 hr Max",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "UNQC_CREF",
+        "name": "Un-QC'ed",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "CREFH",
+        "name": "Height",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "shsrs",
+    "name": "Seamless Hybrid Scan",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "SHSR",
+        "name": "SHSR",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "SHSRH",
+        "name": "SHSR - Height",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "ralas",
+    "name": "Refl At Lowest Altitude",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "RALA",
+        "name": "RALA",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "UNQC_RALA",
+        "name": "Un-QC'ed",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "layer",
+    "name": "Layer Reflectivity",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "LCR_ANC",
+        "name": "Layer Refl [ANC]",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCREF",
+        "name": "Low Comp [0-4 km]",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_LOW",
+        "name": "Low (0 - 24 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_HIGH",
+        "name": "High (24 - 60 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LCR_SUPER",
+        "name": "Super (33 kft - 60 kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_0C",
+        "name": "Const Temp: 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-5C",
+        "name": "Const Temp: -5 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-10C",
+        "name": "Const Temp: -10 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-15C",
+        "name": "Const Temp: -15 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "TREFL_-20C",
+        "name": "Const Temp: -20 C",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "rads",
+    "name": "Echo Top",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "ETP18",
+        "name": "18 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP30",
+        "name": "30 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50",
+        "name": "50 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60",
+        "name": "60 dBZ",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP18KFT",
+        "name": "18 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP30KFT",
+        "name": "30 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50KFT",
+        "name": "50 dBZ(kft)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60KFT",
+        "name": "60 dBZ(kft)",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "thick",
+    "name": "Layer Thickness",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "ETP50_0C",
+        "name": "50 dBZ above 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP50_-20C",
+        "name": "50 dBZ above -20 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60_0C",
+        "name": "60 dBZ above 0 C",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "ETP60_-20C",
+        "name": "60 dBZ above -20 C",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "level",
+    "name": "3D Mosaic Levels",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "M3DL1",
+        "name": "0.5 km",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL2",
+        "name": "0.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL3",
+        "name": "1.00",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL4",
+        "name": "1.25",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL5",
+        "name": "1.50",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL6",
+        "name": "1.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL7",
+        "name": "2.00",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL8",
+        "name": "2.25",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL9",
+        "name": "2.50",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL10",
+        "name": "2.75",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL11",
+        "name": "3.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL12",
+        "name": "3.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL13",
+        "name": "4.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL14",
+        "name": "4.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL15",
+        "name": "5.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL16",
+        "name": "5.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL17",
+        "name": "6.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL18",
+        "name": "6.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL19",
+        "name": "7.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL20",
+        "name": "7.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL21",
+        "name": "8.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL22",
+        "name": "8.5",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL23",
+        "name": "9.0",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL24",
+        "name": "10",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL25",
+        "name": "11",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL26",
+        "name": "12",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL27",
+        "name": "13",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL28",
+        "name": "14",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL29",
+        "name": "15",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL30",
+        "name": "16",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL31",
+        "name": "17",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL32",
+        "name": "18",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "M3DL33",
+        "name": "19",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "zdr",
+    "name": "ZDR - 3D Mosaic",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "MZDRL1",
+        "name": "0.5 km",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL2",
+        "name": "0.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL3",
+        "name": "1.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL4",
+        "name": "1.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL5",
+        "name": "1.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL6",
+        "name": "1.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL7",
+        "name": "2.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL8",
+        "name": "2.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL9",
+        "name": "2.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL10",
+        "name": "2.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL11",
+        "name": "3.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL12",
+        "name": "3.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL13",
+        "name": "4.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL14",
+        "name": "4.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL15",
+        "name": "5.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL16",
+        "name": "5.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL17",
+        "name": "6.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL18",
+        "name": "6.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL19",
+        "name": "7.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL20",
+        "name": "7.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL21",
+        "name": "8.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL22",
+        "name": "8.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL23",
+        "name": "9.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL24",
+        "name": "10",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL25",
+        "name": "11",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL26",
+        "name": "12",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL27",
+        "name": "13",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL28",
+        "name": "14",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL29",
+        "name": "15",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL30",
+        "name": "16",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL31",
+        "name": "17",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL32",
+        "name": "18",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MZDRL33",
+        "name": "19",
+        "min_res_minutes": 5
+      }
+    ]
+  },
+  {
+    "code": "rhohv",
+    "name": "RhoHV - 3D Mosaic",
+    "has_levels": true,
+    "level_suffix": "km",
+    "products": [
+      {
+        "code": "MRHOL1",
+        "name": "0.5 km",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL2",
+        "name": "0.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL3",
+        "name": "1.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL4",
+        "name": "1.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL5",
+        "name": "1.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL6",
+        "name": "1.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL7",
+        "name": "2.00",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL8",
+        "name": "2.25",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL9",
+        "name": "2.50",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL10",
+        "name": "2.75",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL11",
+        "name": "3.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL12",
+        "name": "3.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL13",
+        "name": "4.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL14",
+        "name": "4.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL15",
+        "name": "5.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL16",
+        "name": "5.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL17",
+        "name": "6.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL18",
+        "name": "6.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL19",
+        "name": "7.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL20",
+        "name": "7.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL21",
+        "name": "8.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL22",
+        "name": "8.5",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL23",
+        "name": "9.0",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL24",
+        "name": "10",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL25",
+        "name": "11",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL26",
+        "name": "12",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL27",
+        "name": "13",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL28",
+        "name": "14",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL29",
+        "name": "15",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL30",
+        "name": "16",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL31",
+        "name": "17",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL32",
+        "name": "18",
+        "min_res_minutes": 5
+      },
+      {
+        "code": "MRHOL33",
+        "name": "19",
+        "min_res_minutes": 5
+      }
+    ]
+  },
+  {
+    "code": "rqis",
+    "name": "Radar Quality Index",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "RQI",
+        "name": "RQI",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RAQI_1H",
+        "name": "QPE RQI - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_3H",
+        "name": "QPE RQI - 3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_6H",
+        "name": "QPE RQI - 6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_12H",
+        "name": "QPE RQI - 12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_24H",
+        "name": "QPE RQI - 24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_48H",
+        "name": "QPE RQI - 48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "RAQI_72H",
+        "name": "QPE RQI - 72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "azsh",
+    "name": "Rotation",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "AZ_SHEAR",
+        "name": "Low Level - Instant",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT30M",
+        "name": "Low Level - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT60M",
+        "name": "Low Level - 1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RT120M",
+        "name": "Low Level - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT240M",
+        "name": "Low Level - 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT360M",
+        "name": "Low Level - 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RT1440M",
+        "name": "Low Level - 24 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "AZ_SHEAR_ML",
+        "name": "Mid Level - Instant",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML30M",
+        "name": "Mid Level - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML60M",
+        "name": "Mid Level - 1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "RTML120M",
+        "name": "Mid Level - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML240M",
+        "name": "Mid Level - 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML360M",
+        "name": "Mid Level - 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "RTML1440M",
+        "name": "Mid Level - 24 hr",
+        "min_res_minutes": 30
+      }
+    ]
+  },
+  {
+    "code": "hails",
+    "name": "Hail/Lightning",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "SHI",
+        "name": "Severe Hail Index",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "POSH",
+        "name": "Prob of Severe Hail",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESH",
+        "name": "Max Exp Hail Size",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX30M",
+        "name": "Hail Swath 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX60M",
+        "name": "Hail Swath 1hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "MESHMAX120M",
+        "name": "Hail Swath 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX240M",
+        "name": "Hail Swath 4 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX360M",
+        "name": "Hail Swath 6 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "MESHMAX1440M",
+        "name": "Hail Swath 24 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "LTGPROB30M",
+        "name": "Probability - 30 min",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "LTGPROB60M",
+        "name": "Probability - 60 min",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "precips",
+    "name": "Gauge Influence Index",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "P1_GII_1H",
+        "name": "Pass1 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_GII_72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_1H",
+        "name": "Pass2 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_GII_72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "flash",
+    "name": "FLASH",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "FL_CREST_USF",
+        "name": "CREST Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_CREST_SF",
+        "name": "CREST Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_CREST_SS",
+        "name": "CREST Soil Sat",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_USF",
+        "name": "SAC Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_SF",
+        "name": "SAC Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_SAC_SS",
+        "name": "SAC Soil Sat",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_HP_USF",
+        "name": "Hydrophobic Unit Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_HP_SF",
+        "name": "Hydrophobic Flow",
+        "min_res_minutes": 10
+      },
+      {
+        "code": "FL_ARI30M",
+        "name": "Recur Interval (30 min)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI1H",
+        "name": "Recur Interval (1 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI3H",
+        "name": "Recur Interval (3 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI6H",
+        "name": "Recur Interval (6 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI12H",
+        "name": "Recur Interval (12 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARI24H",
+        "name": "Recur Interval (24 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_ARIMAX",
+        "name": "Recur Interval (max)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG1H",
+        "name": "QPE/FFG Ratio (1 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG3H",
+        "name": "QPE/FFG Ratio (3 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFG6H",
+        "name": "QPE/FFG Ratio (6 hr)",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "FL_FFGMAX",
+        "name": "QPE/FFG Ratio (max)",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "q3rads",
+    "name": "Q3 Radar Only",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "Q3EVAPRATE",
+        "name": "Rate",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "Q3EVAP15M",
+        "name": "15 min",
+        "min_res_minutes": 15
+      },
+      {
+        "code": "Q3EVAP1H",
+        "name": "1 hr",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "Q3EVAP3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "Q3EVAP72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "q3mss",
+    "name": "Q3 Multi-Sensor",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "P1_Q3MS1H",
+        "name": "Pass1 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P1_Q3MS72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS1H",
+        "name": "Pass2 - 1 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS3H",
+        "name": "3 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS6H",
+        "name": "6 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS12H",
+        "name": "12 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS24H",
+        "name": "24 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS48H",
+        "name": "48 hr",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "P2_Q3MS72H",
+        "name": "72 hr",
+        "min_res_minutes": 60
+      }
+    ]
+  },
+  {
+    "code": "waters",
+    "name": "Vertically Integrated Water",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "VIL",
+        "name": "Vert Integrated Liquid",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VILD",
+        "name": "VIL Density",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VII",
+        "name": "Vert Integrated Ice",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "VIL_SWATH_0120M",
+        "name": "VIL Swath - 2 hr",
+        "min_res_minutes": 30
+      },
+      {
+        "code": "VIL_SWATH_1440M",
+        "name": "VIL Swath - 24 hr",
+        "min_res_minutes": 30
+      }
+    ]
+  },
+  {
+    "code": "pcpflag_bb",
+    "name": "Precipitation Flag/Bright Band",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "PCP_FLAG",
+        "name": "Precipitation Flag",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BBTOP",
+        "name": "Bright Band Top",
+        "min_res_minutes": 2
+      },
+      {
+        "code": "BBBOTTOM",
+        "name": "Bright Band Bottom",
+        "min_res_minutes": 2
+      }
+    ]
+  },
+  {
+    "code": "models",
+    "name": "Model",
+    "has_levels": false,
+    "level_suffix": null,
+    "products": [
+      {
+        "code": "MOD_TSFC",
+        "name": "Surface Temp (2M)",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_WBT",
+        "name": "Wet Bulb Temp",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_HGT0C",
+        "name": "Freezing Height",
+        "min_res_minutes": 60
+      },
+      {
+        "code": "MOD_TP",
+        "name": "Tropical Rain Prob",
+        "min_res_minutes": 60
+      }
+    ]
+  }
+];
+
+const fileCatalog = {
+  "mrms_products.json": '[\n  {\n    "code": "brefls",\n    "name": "Base Reflectivity",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "BASE_REFL",\n        "name": "BREF",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "BREF_HR_MAX",\n        "name": "1 hr Max",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "UNQC_BREF",\n        "name": "BREF - Un-QC\'ed",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "crefls",\n    "name": "Composite Reflectivity",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "CREF",\n        "name": "CREF",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "CREF_MAX",\n        "name": "Max Method",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "CREF_HR_MAX",\n        "name": "1 hr Max",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "UNQC_CREF",\n        "name": "Un-QC\'ed",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "CREFH",\n        "name": "Height",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "shsrs",\n    "name": "Seamless Hybrid Scan",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "SHSR",\n        "name": "SHSR",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "SHSRH",\n        "name": "SHSR - Height",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "ralas",\n    "name": "Refl At Lowest Altitude",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "RALA",\n        "name": "RALA",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "UNQC_RALA",\n        "name": "Un-QC\'ed",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "layer",\n    "name": "Layer Reflectivity",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "LCR_ANC",\n        "name": "Layer Refl [ANC]",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "LCREF",\n        "name": "Low Comp [0-4 km]",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "LCR_LOW",\n        "name": "Low (0 - 24 kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "LCR_HIGH",\n        "name": "High (24 - 60 kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "LCR_SUPER",\n        "name": "Super (33 kft - 60 kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "TREFL_0C",\n        "name": "Const Temp: 0 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "TREFL_-5C",\n        "name": "Const Temp: -5 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "TREFL_-10C",\n        "name": "Const Temp: -10 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "TREFL_-15C",\n        "name": "Const Temp: -15 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "TREFL_-20C",\n        "name": "Const Temp: -20 C",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "rads",\n    "name": "Echo Top",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "ETP18",\n        "name": "18 dBZ",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP30",\n        "name": "30 dBZ",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP50",\n        "name": "50 dBZ",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP60",\n        "name": "60 dBZ",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP18KFT",\n        "name": "18 dBZ(kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP30KFT",\n        "name": "30 dBZ(kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP50KFT",\n        "name": "50 dBZ(kft)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP60KFT",\n        "name": "60 dBZ(kft)",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "thick",\n    "name": "Layer Thickness",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "ETP50_0C",\n        "name": "50 dBZ above 0 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP50_-20C",\n        "name": "50 dBZ above -20 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP60_0C",\n        "name": "60 dBZ above 0 C",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "ETP60_-20C",\n        "name": "60 dBZ above -20 C",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "level",\n    "name": "3D Mosaic Levels",\n    "has_levels": true,\n    "level_suffix": "km",\n    "products": [\n      {\n        "code": "M3DL1",\n        "name": "0.5 km",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL2",\n        "name": "0.75",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL3",\n        "name": "1.00",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL4",\n        "name": "1.25",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL5",\n        "name": "1.50",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL6",\n        "name": "1.75",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL7",\n        "name": "2.00",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL8",\n        "name": "2.25",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL9",\n        "name": "2.50",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL10",\n        "name": "2.75",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL11",\n        "name": "3.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL12",\n        "name": "3.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL13",\n        "name": "4.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL14",\n        "name": "4.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL15",\n        "name": "5.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL16",\n        "name": "5.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL17",\n        "name": "6.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL18",\n        "name": "6.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL19",\n        "name": "7.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL20",\n        "name": "7.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL21",\n        "name": "8.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL22",\n        "name": "8.5",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL23",\n        "name": "9.0",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL24",\n        "name": "10",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL25",\n        "name": "11",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL26",\n        "name": "12",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL27",\n        "name": "13",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL28",\n        "name": "14",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL29",\n        "name": "15",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL30",\n        "name": "16",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL31",\n        "name": "17",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL32",\n        "name": "18",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "M3DL33",\n        "name": "19",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "zdr",\n    "name": "ZDR - 3D Mosaic",\n    "has_levels": true,\n    "level_suffix": "km",\n    "products": [\n      {\n        "code": "MZDRL1",\n        "name": "0.5 km",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL2",\n        "name": "0.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL3",\n        "name": "1.00",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL4",\n        "name": "1.25",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL5",\n        "name": "1.50",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL6",\n        "name": "1.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL7",\n        "name": "2.00",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL8",\n        "name": "2.25",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL9",\n        "name": "2.50",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL10",\n        "name": "2.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL11",\n        "name": "3.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL12",\n        "name": "3.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL13",\n        "name": "4.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL14",\n        "name": "4.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL15",\n        "name": "5.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL16",\n        "name": "5.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL17",\n        "name": "6.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL18",\n        "name": "6.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL19",\n        "name": "7.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL20",\n        "name": "7.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL21",\n        "name": "8.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL22",\n        "name": "8.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL23",\n        "name": "9.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL24",\n        "name": "10",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL25",\n        "name": "11",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL26",\n        "name": "12",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL27",\n        "name": "13",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL28",\n        "name": "14",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL29",\n        "name": "15",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL30",\n        "name": "16",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL31",\n        "name": "17",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL32",\n        "name": "18",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MZDRL33",\n        "name": "19",\n        "min_res_minutes": 5\n      }\n    ]\n  },\n  {\n    "code": "rhohv",\n    "name": "RhoHV - 3D Mosaic",\n    "has_levels": true,\n    "level_suffix": "km",\n    "products": [\n      {\n        "code": "MRHOL1",\n        "name": "0.5 km",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL2",\n        "name": "0.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL3",\n        "name": "1.00",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL4",\n        "name": "1.25",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL5",\n        "name": "1.50",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL6",\n        "name": "1.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL7",\n        "name": "2.00",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL8",\n        "name": "2.25",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL9",\n        "name": "2.50",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL10",\n        "name": "2.75",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL11",\n        "name": "3.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL12",\n        "name": "3.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL13",\n        "name": "4.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL14",\n        "name": "4.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL15",\n        "name": "5.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL16",\n        "name": "5.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL17",\n        "name": "6.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL18",\n        "name": "6.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL19",\n        "name": "7.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL20",\n        "name": "7.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL21",\n        "name": "8.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL22",\n        "name": "8.5",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL23",\n        "name": "9.0",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL24",\n        "name": "10",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL25",\n        "name": "11",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL26",\n        "name": "12",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL27",\n        "name": "13",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL28",\n        "name": "14",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL29",\n        "name": "15",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL30",\n        "name": "16",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL31",\n        "name": "17",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL32",\n        "name": "18",\n        "min_res_minutes": 5\n      },\n      {\n        "code": "MRHOL33",\n        "name": "19",\n        "min_res_minutes": 5\n      }\n    ]\n  },\n  {\n    "code": "rqis",\n    "name": "Radar Quality Index",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "RQI",\n        "name": "RQI",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RAQI_1H",\n        "name": "QPE RQI - 1 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_3H",\n        "name": "QPE RQI - 3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_6H",\n        "name": "QPE RQI - 6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_12H",\n        "name": "QPE RQI - 12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_24H",\n        "name": "QPE RQI - 24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_48H",\n        "name": "QPE RQI - 48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "RAQI_72H",\n        "name": "QPE RQI - 72 hr",\n        "min_res_minutes": 60\n      }\n    ]\n  },\n  {\n    "code": "azsh",\n    "name": "Rotation",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "AZ_SHEAR",\n        "name": "Low Level - Instant",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RT30M",\n        "name": "Low Level - 30 min",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RT60M",\n        "name": "Low Level - 1 hr",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RT120M",\n        "name": "Low Level - 2 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RT240M",\n        "name": "Low Level - 4 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RT360M",\n        "name": "Low Level - 6 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RT1440M",\n        "name": "Low Level - 24 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "AZ_SHEAR_ML",\n        "name": "Mid Level - Instant",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RTML30M",\n        "name": "Mid Level - 30 min",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RTML60M",\n        "name": "Mid Level - 1 hr",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "RTML120M",\n        "name": "Mid Level - 2 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RTML240M",\n        "name": "Mid Level - 4 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RTML360M",\n        "name": "Mid Level - 6 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "RTML1440M",\n        "name": "Mid Level - 24 hr",\n        "min_res_minutes": 30\n      }\n    ]\n  },\n  {\n    "code": "hails",\n    "name": "Hail/Lightning",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "SHI",\n        "name": "Severe Hail Index",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "POSH",\n        "name": "Prob of Severe Hail",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "MESH",\n        "name": "Max Exp Hail Size",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "MESHMAX30M",\n        "name": "Hail Swath 30 min",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "MESHMAX60M",\n        "name": "Hail Swath 1hr",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "MESHMAX120M",\n        "name": "Hail Swath 2 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "MESHMAX240M",\n        "name": "Hail Swath 4 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "MESHMAX360M",\n        "name": "Hail Swath 6 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "MESHMAX1440M",\n        "name": "Hail Swath 24 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "LTGPROB30M",\n        "name": "Probability - 30 min",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "LTGPROB60M",\n        "name": "Probability - 60 min",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "precips",\n    "name": "Gauge Influence Index",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "P1_GII_1H",\n        "name": "Pass1 - 1 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_3H",\n        "name": "3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_6H",\n        "name": "6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_12H",\n        "name": "12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_24H",\n        "name": "24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_48H",\n        "name": "48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_GII_72H",\n        "name": "72 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_1H",\n        "name": "Pass2 - 1 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_3H",\n        "name": "3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_6H",\n        "name": "6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_12H",\n        "name": "12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_24H",\n        "name": "24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_48H",\n        "name": "48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_GII_72H",\n        "name": "72 hr",\n        "min_res_minutes": 60\n      }\n    ]\n  },\n  {\n    "code": "flash",\n    "name": "FLASH",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "FL_CREST_USF",\n        "name": "CREST Unit Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_CREST_SF",\n        "name": "CREST Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_CREST_SS",\n        "name": "CREST Soil Sat",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_SAC_USF",\n        "name": "SAC Unit Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_SAC_SF",\n        "name": "SAC Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_SAC_SS",\n        "name": "SAC Soil Sat",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_HP_USF",\n        "name": "Hydrophobic Unit Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_HP_SF",\n        "name": "Hydrophobic Flow",\n        "min_res_minutes": 10\n      },\n      {\n        "code": "FL_ARI30M",\n        "name": "Recur Interval (30 min)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARI1H",\n        "name": "Recur Interval (1 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARI3H",\n        "name": "Recur Interval (3 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARI6H",\n        "name": "Recur Interval (6 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARI12H",\n        "name": "Recur Interval (12 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARI24H",\n        "name": "Recur Interval (24 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_ARIMAX",\n        "name": "Recur Interval (max)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_FFG1H",\n        "name": "QPE/FFG Ratio (1 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_FFG3H",\n        "name": "QPE/FFG Ratio (3 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_FFG6H",\n        "name": "QPE/FFG Ratio (6 hr)",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "FL_FFGMAX",\n        "name": "QPE/FFG Ratio (max)",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "q3rads",\n    "name": "Q3 Radar Only",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "Q3EVAPRATE",\n        "name": "Rate",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "Q3EVAP15M",\n        "name": "15 min",\n        "min_res_minutes": 15\n      },\n      {\n        "code": "Q3EVAP1H",\n        "name": "1 hr",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "Q3EVAP3H",\n        "name": "3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "Q3EVAP6H",\n        "name": "6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "Q3EVAP12H",\n        "name": "12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "Q3EVAP24H",\n        "name": "24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "Q3EVAP48H",\n        "name": "48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "Q3EVAP72H",\n        "name": "72 hr",\n        "min_res_minutes": 60\n      }\n    ]\n  },\n  {\n    "code": "q3mss",\n    "name": "Q3 Multi-Sensor",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "P1_Q3MS1H",\n        "name": "Pass1 - 1 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS3H",\n        "name": "3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS6H",\n        "name": "6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS12H",\n        "name": "12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS24H",\n        "name": "24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS48H",\n        "name": "48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P1_Q3MS72H",\n        "name": "72 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS1H",\n        "name": "Pass2 - 1 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS3H",\n        "name": "3 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS6H",\n        "name": "6 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS12H",\n        "name": "12 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS24H",\n        "name": "24 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS48H",\n        "name": "48 hr",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "P2_Q3MS72H",\n        "name": "72 hr",\n        "min_res_minutes": 60\n      }\n    ]\n  },\n  {\n    "code": "waters",\n    "name": "Vertically Integrated Water",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "VIL",\n        "name": "Vert Integrated Liquid",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "VILD",\n        "name": "VIL Density",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "VII",\n        "name": "Vert Integrated Ice",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "VIL_SWATH_0120M",\n        "name": "VIL Swath - 2 hr",\n        "min_res_minutes": 30\n      },\n      {\n        "code": "VIL_SWATH_1440M",\n        "name": "VIL Swath - 24 hr",\n        "min_res_minutes": 30\n      }\n    ]\n  },\n  {\n    "code": "pcpflag_bb",\n    "name": "Precipitation Flag/Bright Band",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "PCP_FLAG",\n        "name": "Precipitation Flag",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "BBTOP",\n        "name": "Bright Band Top",\n        "min_res_minutes": 2\n      },\n      {\n        "code": "BBBOTTOM",\n        "name": "Bright Band Bottom",\n        "min_res_minutes": 2\n      }\n    ]\n  },\n  {\n    "code": "models",\n    "name": "Model",\n    "has_levels": false,\n    "level_suffix": null,\n    "products": [\n      {\n        "code": "MOD_TSFC",\n        "name": "Surface Temp (2M)",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "MOD_WBT",\n        "name": "Wet Bulb Temp",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "MOD_HGT0C",\n        "name": "Freezing Height",\n        "min_res_minutes": 60\n      },\n      {\n        "code": "MOD_TP",\n        "name": "Tropical Rain Prob",\n        "min_res_minutes": 60\n      }\n    ]\n  }\n]',
+  "mrms_core.py": '"""MRMS radar data fetching — shared core library.\n\nFetches rendered radar PNGs from NOAA/NSSL MRMS Operational Product Viewer.\nNo S3, no GRIB2 — just HTTP GET → PNG bytes.\n"""\n\nimport os\nfrom dataclasses import dataclass\nfrom datetime import datetime, timezone\n\nimport requests\n\n# NOAA MRMS server does not send the intermediate CA certificate in its\n# TLS handshake (Sectigo Public Server Authentication CA DV R36).\n# This is a known server-side issue; suppress the InsecureRequestWarning.\nimport urllib3\nurllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n\n# ---------------------------------------------------------------------------\n# Constants\n# ---------------------------------------------------------------------------\n\nRENDER_URL = (\n    "https://mrms.nssl.noaa.gov/qvs/product_viewer/local/"\n    "render_multi_domain_product_layer.php"\n)\nLEGEND_URL = (\n    "https://mrms.nssl.noaa.gov/qvs/product_viewer/shared/"\n    "fetch_svg_legend_via_config.php"\n)\nCPP_EXEC_DIR = "/home/metop/web/specific/opv/"\nWEB_RESOURCES_DIR = "/var/www/html/qvs/product_viewer/resources/"\nREFERER = "https://mrms.nssl.noaa.gov/qvs/product_viewer/index.php"\n\n# Cache directory — relative to this file, gitignored\nCACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")\n\nimport json\n\n# Product Catalog\nPRODUCTS_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mrms_products.json")\n\ndef _load_products_catalog() -> list:\n    try:\n        with open(PRODUCTS_JSON_PATH, "r", encoding="utf-8") as f:\n            return json.load(f)\n    except Exception:\n        return []\n\nPRODUCT_CATALOG = _load_products_catalog()\n\ndef get_product_metadata(product_code: str) -> dict | None:\n    """Find a product by its code in the catalog and return its details."""\n    for category in PRODUCT_CATALOG:\n        for product in category.get("products", []):\n            if product.get("code") == product_code:\n                return {\n                    "code": product.get("code"),\n                    "name": product.get("name"),\n                    "min_res_minutes": product.get("min_res_minutes", 2),\n                    "category_code": category.get("code"),\n                    "category_name": category.get("name"),\n                    "has_levels": category.get("has_levels", False),\n                }\n    return None\n\n\n# ---------------------------------------------------------------------------\n# Data model\n# ---------------------------------------------------------------------------\n\n\n@dataclass\nclass RadarImage:\n    """A fetched MRMS radar image with metadata."""\n\n    png_bytes: bytes\n    product: str\n    lat: float\n    lon: float\n    product_name: str = ""\n    zoom: int = 7\n    timestamp: str = ""\n    fetch_time: str = ""\n    source_url: str = ""\n    width: int = 920\n    height: int = 630\n    from_cache: bool = False\n\n    def get_bounds(self) -> tuple[float, float, float, float]:\n        """Return the geographic bounding box (min_lat, max_lat, min_lon, max_lon) for this image."""\n        return get_mercator_bounds(self.lat, self.lon, self.zoom, self.width, self.height)\n\n\n# ---------------------------------------------------------------------------\n# Time utilities\n# ---------------------------------------------------------------------------\n\n\ndef round_to_mrms_window(dt: datetime, resolution_mins: int = 2) -> datetime:\n    """Round a datetime down to the nearest MRMS window for the given resolution."""\n    minute = (dt.minute // resolution_mins) * resolution_mins\n    return dt.replace(minute=minute, second=0, microsecond=0)\n\n\n# ---------------------------------------------------------------------------\n# Spatial utilities\n# ---------------------------------------------------------------------------\n\n\ndef get_mercator_bounds(\n    clat: float, clon: float, zoom: int, width: int, height: int\n) -> tuple[float, float, float, float]:\n    """Calculate the geographic bounding box (min_lat, max_lat, min_lon, max_lon)\n    for a viewport with center (clat, clon), Leaflet zoom level, and pixel dimensions.\n    Uses standard Web Mercator (EPSG:3857) formulas.\n    """\n    import math\n    clat_rad = math.radians(clat)\n    \n    center_x = (clon + 180.0) / 360.0\n    center_y = (1.0 - math.log(math.tan(clat_rad) + 1.0 / math.cos(clat_rad)) / math.pi) / 2.0\n    \n    map_size = 256.0 * (2.0 ** zoom)\n    \n    left_x = (center_x * map_size - (width / 2.0)) / map_size\n    right_x = (center_x * map_size + (width / 2.0)) / map_size\n    top_y = (center_y * map_size - (height / 2.0)) / map_size\n    bottom_y = (center_y * map_size + (height / 2.0)) / map_size\n    \n    def x_to_lon(x):\n        return x * 360.0 - 180.0\n        \n    def y_to_lat(y):\n        val = math.pi * (1.0 - 2.0 * y)\n        lat_rad = 2.0 * math.atan(math.exp(val)) - math.pi / 2.0\n        return math.degrees(lat_rad)\n        \n    return y_to_lat(bottom_y), y_to_lat(top_y), x_to_lon(left_x), x_to_lon(right_x)\n\n\n\n# ---------------------------------------------------------------------------\n# Cache layer\n# ---------------------------------------------------------------------------\n\n\ndef _cache_key(\n    product: str,\n    year: int,\n    month: int,\n    day: int,\n    hour: int,\n    minute: int,\n    lat: float,\n    lon: float,\n    zoom: int,\n    width: int,\n    height: int,\n) -> str:\n    """Build a deterministic cache filename from request parameters."""\n    return (\n        f"{product}_{year:04d}{month:02d}{day:02d}_"\n        f"{hour:02d}{minute:02d}_"\n        f"{lat}_{lon}_{zoom}_"\n        f"{width}x{height}.png"\n    )\n\n\ndef _cache_save(key: str, png_bytes: bytes) -> None:\n    """Save PNG bytes to the cache directory."""\n    os.makedirs(CACHE_DIR, exist_ok=True)\n    path = os.path.join(CACHE_DIR, key)\n    with open(path, "wb") as f:\n        f.write(png_bytes)\n\n\ndef _cache_load(key: str) -> bytes | None:\n    """Load PNG bytes from cache, or None if not cached."""\n    path = os.path.join(CACHE_DIR, key)\n    if os.path.exists(path):\n        with open(path, "rb") as f:\n            return f.read()\n    return None\n\n\n# ---------------------------------------------------------------------------\n# Public API\n# ---------------------------------------------------------------------------\n\n\ndef fetch_radar(\n    product: str = "M3DL13",\n    lat: float = 40.55,\n    lon: float = -104.68,\n    zoom: int = 7,\n    width: int = 920,\n    height: int = 630,\n    year: int | None = None,\n    month: int | None = None,\n    day: int | None = None,\n    hour: int | None = None,\n    minute: int | None = None,\n) -> RadarImage:\n    """Fetch a rendered MRMS radar image from NOAA.\n\n    If *year* is ``None``, the current UTC time (rounded to the nearest\n    2-minute MRMS window) is used.\n    """\n    # --- resolve time -------------------------------------------------------\n    if year is None:\n        meta = get_product_metadata(product)\n        res_mins = meta["min_res_minutes"] if meta else 2\n        now = round_to_mrms_window(datetime.now(timezone.utc), res_mins)\n        # NOAA MRMS has processing latency — adjust back by at least one cycle\n        from datetime import timedelta\n        latency_mins = max(4, res_mins * 2)\n        now = now - timedelta(minutes=latency_mins)\n        year, month, day = now.year, now.month, now.day\n        hour, minute = now.hour, now.minute\n\n\n    # --- fetch from NOAA ----------------------------------------------------\n    from datetime import timedelta\n\n    for attempt in range(6):\n        # Check cache for current timestamp\n        assert year is not None\n        assert month is not None\n        assert day is not None\n        assert hour is not None\n        assert minute is not None\n        key = _cache_key(product, year, month, day, hour, minute,\n                         lat, lon, zoom, width, height)\n        cached = _cache_load(key)\n        if cached is not None:\n            # Check if cached image is blank\n            if len(cached) >= 1024:\n                return RadarImage(\n                    png_bytes=cached,\n                    product=product,\n                    lat=lat,\n                    lon=lon,\n                    zoom=zoom,\n                    width=width,\n                    height=height,\n                    timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",\n                    fetch_time=datetime.now(timezone.utc).isoformat(),\n                    from_cache=True,\n                )\n\n        # Fetch from NOAA\n        params = {\n            "mode": "run",\n            "cpp_exec_dir": CPP_EXEC_DIR,\n            "web_resources_dir": WEB_RESOURCES_DIR,\n            "prod_root": product,\n            "qperate_pal_option": 0,\n            "qpe_pal_option": 0,\n            "year": year,\n            "month": month,\n            "day": day,\n            "hour": hour,\n            "minute": minute,\n            "clon": lon,\n            "clat": lat,\n            "zoom": zoom,\n            "width": width,\n            "height": height,\n        }\n\n        headers = {\n            "User-Agent": "Mozilla/5.0",\n            "Referer": REFERER,\n        }\n\n        fetch_time = datetime.now(timezone.utc)\n\n        r = requests.get(\n            RENDER_URL, params=params, headers=headers, timeout=30, verify=False\n        )\n        r.raise_for_status()\n\n        # Check if PNG is blank (transparent PNGs <1KB are typically empty)\n        if len(r.content) >= 1024:\n            # Save to cache and return\n            _cache_save(key, r.content)\n\n            # Resolve the actual URL that was fetched (for debugging).\n            req = getattr(r, "request", None)\n            source_url = req.url if req is not None else ""\n\n            return RadarImage(\n                png_bytes=r.content,\n                product=product,\n                lat=lat,\n                lon=lon,\n                zoom=zoom,\n                width=width,\n                height=height,\n                timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",\n                fetch_time=fetch_time.isoformat(),\n                source_url=source_url,\n                from_cache=False,\n            )\n\n        # Step back 2 minutes and retry\n        dt = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)\n        dt = dt - timedelta(minutes=2)\n        year, month, day = dt.year, dt.month, dt.day\n        hour, minute = dt.hour, dt.minute\n\n    # All attempts failed — return the last (blank) image\n    _cache_save(key, r.content)\n    req = getattr(r, "request", None)\n    source_url = req.url if req is not None else ""\n    return RadarImage(\n        png_bytes=r.content,\n        product=product,\n        lat=lat,\n        lon=lon,\n        zoom=zoom,\n        width=width,\n        height=height,\n        timestamp=f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00",\n        fetch_time=fetch_time.isoformat(),\n        source_url=source_url,\n        from_cache=False,\n    )\n\n\ndef fetch_legend(product: str) -> str | None:\n    """Fetch the SVG colorbar legend for a given MRMS product.\n\n    Returns the raw SVG string, or ``None`` if the legend is unavailable.\n    Legends are cached on disk since they never change per product.\n    """\n    cache_key = f"legend_{product}.svg"\n    cached = _cache_load(cache_key)\n    if cached is not None:\n        return cached.decode("utf-8")\n\n    params = {\n        "web_resources_dir": WEB_RESOURCES_DIR,\n        "config_name": "title_and_legend_config.txt",\n        "product": product,\n    }\n\n    headers = {\n        "User-Agent": "Mozilla/5.0",\n        "Referer": REFERER,\n    }\n\n    try:\n        r = requests.get(\n            LEGEND_URL, params=params, headers=headers, timeout=15, verify=False\n        )\n        r.raise_for_status()\n    except Exception:\n        return None\n\n    svg = r.text\n    if not svg or "<svg" not in svg:\n        return None\n\n    _cache_save(cache_key, svg.encode("utf-8"))\n    return svg\n',
+  "mrms_cli.py": '"""MRMS Radar CLI — fetch NOAA radar imagery from the terminal.\n\nUsage:\n    mrms fetch                              # defaults: M3DL13, Denver, now\n    mrms fetch --product BREF --lat 35 -lon -97 --zoom 5\n    mrms fetch --time 2026-01-15T08:30\n    mrms fetch --width 1200 --height 800 -o ~/Desktop/storm.png\n"""\n\nimport click\nfrom datetime import datetime\n\nfrom mrms_core import fetch_radar, round_to_mrms_window, PRODUCT_CATALOG, get_product_metadata\n\n\n@click.group()\ndef cli():\n    """MRMS Radar — fetch rendered radar imagery from NOAA/NSSL MRMS.\n\n    Default product is M3DL13 (3D Reflectivity at 4.0 km) centered on\n    Denver, CO (40.55, -104.68) at zoom level 7.\n    """\n    pass\n\n\n@cli.command()\n@click.option(\n    "--product", "-p",\n    default="M3DL13",\n    help="MRMS product code (e.g., M3DL13, BREF, CREF, SHSR).",\n)\n@click.option(\n    "--lat",\n    default=40.55,\n    type=float,\n    help="Center latitude (default: 40.55 — Denver, CO).",\n)\n@click.option(\n    "--lon",\n    default=-104.68,\n    type=float,\n    help="Center longitude (default: -104.68 — Denver, CO).",\n)\n@click.option(\n    "--zoom", "-z",\n    default=7,\n    type=int,\n    help="Leaflet zoom level: 3=continent, 7=state, 10=city (default: 7).",\n)\n@click.option(\n    "--width", "-W",\n    default=920,\n    type=int,\n    help="Image width in pixels (default: 920).",\n)\n@click.option(\n    "--height", "-H",\n    default=630,\n    type=int,\n    help="Image height in pixels (default: 630).",\n)\n@click.option(\n    "--time", "-t",\n    default=None,\n    help="Timestamp in ISO 8601 format (e.g., 2026-06-06T16:30). "\n         "Defaults to current UTC time rounded to 2-min MRMS window.",\n)\n@click.option(\n    "--output", "-o",\n    default=None,\n    type=click.Path(dir_okay=False, writable=True),\n    help="Output file path. Defaults to radar_YYYYMMDD_HHMM.png.",\n)\ndef fetch(product, lat, lon, zoom, width, height, time, output):\n    """Fetch a radar image from NOAA MRMS and save it to disk.\n\n    Examples:\\n\n      \\b\n      mrms fetch\n      mrms fetch --product BREF --lat 35.0 --lon -97.0\n      mrms fetch --time 2026-01-15T08:30 -o storm.png\n      mrms fetch --width 1200 --height 800\n    """\n    # Validate product\n    meta = get_product_metadata(product)\n    if meta is None:\n        import difflib\n        all_codes = []\n        for category in PRODUCT_CATALOG:\n            for p in category.get("products", []):\n                all_codes.append(p.get("code"))\n        matches = difflib.get_close_matches(product, all_codes, n=3, cutoff=0.5)\n        \n        click.echo(f"Warning: \'{product}\' is not recognized in the product catalog.", err=True)\n        if matches:\n            click.echo(f"Did you mean one of these? {\', \'.join(matches)}", err=True)\n        else:\n            click.echo("Use \'python mrms_cli.py products\' to list all recognized codes.", err=True)\n\n    # Resolve time\n    if time is not None:\n        dt = datetime.fromisoformat(time)\n        res_mins = meta["min_res_minutes"] if meta else 2\n        dt = round_to_mrms_window(dt, res_mins)\n        year, month, day = dt.year, dt.month, dt.day\n        hour, minute = dt.hour, dt.minute\n        img = fetch_radar(\n            product=product, lat=lat, lon=lon, zoom=zoom,\n            width=width, height=height,\n            year=year, month=month, day=day, hour=hour, minute=minute,\n        )\n    else:\n        img = fetch_radar(\n            product=product, lat=lat, lon=lon, zoom=zoom,\n            width=width, height=height,\n        )\n\n    # Determine output path\n    if output is None:\n        output = (\n            f"radar_"\n            f"{img.timestamp.replace(\'-\', \'\').replace(\':\', \'\').replace(\'T\', \'_\')}"\n            f".png"\n        )\n\n    # Save\n    with open(output, "wb") as f:\n        f.write(img.png_bytes)\n\n    cache_tag = " (cached)" if img.from_cache else ""\n    click.echo(\n        f"Saved {output}  "\n        f"({len(img.png_bytes):,} bytes, {img.width}\\u00d7{img.height})"\n        f"{cache_tag}"\n    )\n\n\n@cli.command()\n@click.option(\n    "--category", "-c",\n    default=None,\n    help="Filter products by category code or name.",\n)\ndef products(category):\n    """List all available MRMS categories and product codes."""\n    if category:\n        cat_lower = category.lower()\n        found = False\n        for cat in PRODUCT_CATALOG:\n            if cat_lower in (cat["code"].lower(), cat["name"].lower()):\n                found = True\n                click.echo(f"\\n{cat[\'name\']} ({cat[\'code\']}):")\n                for p in cat["products"]:\n                    click.echo(f"  {p[\'code\']:15} - {p[\'name\']} ({p[\'min_res_minutes\']} min res)")\n        if not found:\n            click.echo(f"Category \'{category}\' not found.", err=True)\n    else:\n        click.echo("MRMS Categories:")\n        for cat in PRODUCT_CATALOG:\n            click.echo(f"- {cat[\'code\']:12} : {cat[\'name\']}")\n        click.echo("\\nUse \'--category <name>\' to list all specific product codes under a category.")\n\n\nif __name__ == "__main__":\n    cli()\n'
+};
+
+function getCorsProxy() {
+  const select = document.getElementById('proxy-select') ? document.getElementById('proxy-select').value : 'allorigins';
+  if (select === 'none') return '';
+  return document.getElementById('cors-proxy') ? document.getElementById('cors-proxy').value : 'https://api.allorigins.win/raw?url=';
+}
+
+function resolveUrl(url) {
+  const proxy = getCorsProxy();
+  
+  if (url.startsWith('/api/radar')) {
+    const params = new URLSearchParams(url.split('?')[1]);
+    const p = new URLSearchParams({
+      mode: "run",
+      cpp_exec_dir: "/home/metop/web/specific/opv/",
+      web_resources_dir: "/var/www/html/qvs/product_viewer/resources/",
+      prod_root: params.get('product') || 'M3DL13',
+      qperate_pal_option: 0,
+      qpe_pal_option: 0,
+      clon: params.get('lon') || S.lon,
+      clat: params.get('lat') || S.lat,
+      zoom: params.get('zoom') || S.zoom,
+      width: params.get('width') || 920,
+      height: params.get('height') || 630
+    });
+    
+    const timeVal = params.get('time');
+    if (timeVal) {
+      const parts = timeVal.split('T');
+      const dateParts = parts[0].split('-');
+      const timeParts = parts[1].split(':');
+      p.set('year', dateParts[0]);
+      p.set('month', parseInt(dateParts[1]));
+      p.set('day', parseInt(dateParts[2]));
+      p.set('hour', parseInt(timeParts[0]));
+      p.set('minute', parseInt(timeParts[1]));
+    } else {
+      const d = roundSlot(new Date());
+      d.setMinutes(d.getMinutes() - S.timeSlot * 2);
+      p.set('year', d.getUTCFullYear());
+      p.set('month', d.getUTCMonth() + 1);
+      p.set('day', d.getUTCDate());
+      p.set('hour', d.getUTCHours());
+      p.set('minute', d.getUTCMinutes());
+    }
+    
+    const noaaUrl = 'https://mrms.nssl.noaa.gov/qvs/product_viewer/local/render_multi_domain_product_layer.php?' + p;
+    return proxy ? proxy + encodeURIComponent(noaaUrl) : noaaUrl;
+  }
+  
+  if (url.startsWith('/api/legend')) {
+    const params = new URLSearchParams(url.split('?')[1]);
+    const product = params.get('product') || 'M3DL13';
+    const noaaUrl = `https://mrms.nssl.noaa.gov/qvs/product_viewer/shared/fetch_svg_legend_via_config.php?web_resources_dir=/var/www/html/qvs/product_viewer/resources/&config_name=title_and_legend_config.txt&product=${product}`;
+    return proxy ? proxy + encodeURIComponent(noaaUrl) : noaaUrl;
+  }
+  
+  return url;
+}
+
+// Hijack fetch globally to intercept local API requests and redirect via CORS proxy
+const originalFetch = window.fetch;
+window.fetch = function(input, init) {
+  let url = typeof input === 'string' ? input : input.url;
+  
+  if (url.startsWith('/api/products')) {
+    return Promise.resolve(new Response(JSON.stringify(categoriesCatalog), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  }
+  
+  if (url.startsWith('/api/timezone')) {
+    const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const now = new Date();
+    const abbr = now.toLocaleDateString('en-US', { day: 'numeric', timeZoneName: 'short' }).split(', ')[1] || 'UTC';
+    const offset = -now.getTimezoneOffset() / 60;
+    const localTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    
+    return Promise.resolve(new Response(JSON.stringify({
+      tz: tzName,
+      abbr: abbr,
+      offset_hours: offset,
+      local_time: localTime
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  }
+  
+  if (url.startsWith('/api/radar') || url.startsWith('/api/legend')) {
+    url = resolveUrl(url);
+  }
+  
+  return originalFetch(url, init);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Terminal & Pyodide WASM Integration
+// ═══════════════════════════════════════════════════════════════════════════
+let termInstance = null;
+let pyodideInstance = null;
+let terminalOpen = false;
+let pyodideLoading = false;
+let currentTermLine = '';
+
+// Expose handlers globally for Python bindings
+window.termWrite = (data) => {
+  if (termInstance) termInstance.write(data.replace(/\n/g, '\r\n'));
+};
+
+window.getCorsProxy = () => {
+  return getCorsProxy();
+};
+
+window.onPyodideFileGenerated = (filename, bytes) => {
+  if (filename.startsWith('radar_') && filename.endsWith('.png')) {
+    const blob = new Blob([bytes], { type: 'image/png' });
+    const localUrl = URL.createObjectURL(blob);
+    
+    updateRadarOverlay(localUrl);
+    
+    try {
+      const metaJson = window.pyodideInstance.runPython(`
+import json
+from mrms_core import get_product_metadata
+meta = get_product_metadata(img.product) if 'img' in globals() else None
+json.dumps({
+    "product": img.product if 'img' in globals() else "",
+    "timestamp": img.timestamp if 'img' in globals() else "",
+    "lat": img.lat if 'img' in globals() else 0.0,
+    "lon": img.lon if 'img' in globals() else 0.0,
+    "zoom": img.zoom if 'img' in globals() else 7,
+    "product_name": meta["name"] if meta else ""
+})
+      `);
+      const meta = JSON.parse(metaJson);
+      if (meta.product) {
+        S.zoom = meta.zoom;
+        S.lat = meta.lat;
+        S.lon = meta.lon;
+        
+        if (leafletMap) {
+          leafletMap.setView([S.lat, S.lon], S.zoom);
+        }
+        
+        if ($('productBadge')) {
+          $('productBadge').innerHTML = `<strong>${meta.product_name || meta.product}</strong> (CLI)`;
+        }
+        
+        updateTimeDisplay(meta.timestamp);
+      }
+    } catch (e) {
+      console.error("Failed to sync CLI metadata to Leaflet UI:", e);
+    }
+    
+    if (termInstance) {
+      termInstance.write('\r\n\x1b[1;32m[Info] Map dynamically updated from CLI output file: ' + filename + '\x1b[0m\r\n');
+    }
+  } else {
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+  }
+};
+
+function toggleTerminal() {
+  terminalOpen = !terminalOpen;
+  const panel = $('terminalPanel');
+  if (terminalOpen) {
+    panel.classList.add('open');
+    if (!termInstance) {
+      initTerminal();
+    } else {
+      termInstance.focus();
+    }
+  } else {
+    panel.classList.remove('open');
+  }
+}
+
+function initTerminal() {
+  if (pyodideLoading) return;
+  pyodideLoading = true;
+  
+  const dot = $('terminalStatusDot');
+  const text = $('terminalStatusText');
+  dot.className = 'status-dot loading';
+  text.innerText = "Loading WASM...";
+  
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css';
+  document.head.appendChild(link);
+  
+  const scriptXterm = document.createElement('script');
+  scriptXterm.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
+  document.head.appendChild(scriptXterm);
+  
+  const scriptPyodide = document.createElement('script');
+  scriptPyodide.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+  document.head.appendChild(scriptPyodide);
+  
+  scriptPyodide.onload = async () => {
+    if (typeof Terminal === 'undefined') {
+      await new Promise(resolve => scriptXterm.onload = resolve);
+    }
+    
+    termInstance = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'Fira Code, Courier New, monospace',
+      fontSize: 12,
+      theme: {
+        background: '#0d1117',
+        foreground: '#c9d1d9',
+        cursor: '#58a6ff'
+      }
+    });
+    termInstance.open(document.getElementById('terminal-body'));
+    termInstance.writeln("=== MRMS Browser Console ===");
+    termInstance.writeln("Loading Python WebAssembly runtime...");
+    
+    try {
+      window.pyodideInstance = await loadPyodide();
+      
+      text.innerText = "Installing Packages...";
+      termInstance.writeln("Installing dependencies (click, requests, pyodide-http)...");
+      
+      await window.pyodideInstance.loadPackage(["requests", "micropip"]);
+      const micropip = window.pyodideInstance.pyimport("micropip");
+      await micropip.install("click");
+      await micropip.install("pyodide-http");
+      
+      text.innerText = "Syncing Codebase...";
+      termInstance.writeln("Mounting application files in virtual FS...");
+      
+      for (const [filename, content] of Object.entries(fileCatalog)) {
+        window.pyodideInstance.FS.writeFile(filename, content);
+      }
+      
+      termInstance.writeln("Setting up network bridges...");
+      
+      await window.pyodideInstance.runPythonAsync(`
+import pyodide_http
+pyodide_http.patch_all()
+
+import requests
+original_get = requests.get
+
+def local_proxy_get(url, *args, **kwargs):
+    kwargs['verify'] = False
+    return original_get(url, *args, **kwargs)
+
+requests.get = local_proxy_get
+      `);
+      
+      dot.className = 'status-dot ready';
+      text.innerText = "Console Ready";
+      
+      termInstance.clear();
+      termInstance.writeln("=== MRMS Interactive Web Console ===");
+      termInstance.writeln("Type CLI commands directly. Image outputs will update the Leaflet map!");
+      termInstance.writeln("Type \x1b[1;33mmrms fetch --help\x1b[0m or \x1b[1;33mmrms products\x1b[0m to list options.");
+      showTermPrompt();
+      
+      termInstance.onData(data => {
+        const code = data.charCodeAt(0);
+        if (code === 13) {
+          termInstance.write('\r\n');
+          handleTermCommand(currentTermLine);
+          currentTermLine = '';
+        } else if (code === 127 || code === 8) {
+          if (currentTermLine.length > 0) {
+            currentTermLine = currentTermLine.slice(0, -1);
+            termInstance.write(' ');
+          }
+        } else if (code === 3) {
+          termInstance.write('^C\r\n');
+          currentTermLine = '';
+          showTermPrompt();
+        } else if (code >= 32) {
+          currentTermLine += data;
+          termInstance.write(data);
+        }
+      });
+      termInstance.focus();
+      
+    } catch (e) {
+      dot.className = 'status-dot';
+      text.innerText = "Load Failed";
+      termInstance.writeln("\x1b[1;31mInitialization Error: " + e.message + "\x1b[0m");
+    }
+  };
+}
+
+function showTermPrompt() {
+  if (termInstance) termInstance.write('\r\nmrms> ');
+}
+
+async function handleTermCommand(cmdLine) {
+  const trimmed = cmdLine.trim();
+  if (!trimmed) {
+    showTermPrompt();
+    return;
+  }
+  
+  const args = trimmed.split(/\s+/);
+  const cmdName = args[0];
+  
+  if (cmdName === 'mrms' || (cmdName === 'python' && args[1] === 'mrms_cli.py')) {
+    const finalArgs = cmdName === 'mrms' ? args.slice(1) : args.slice(2);
+    window.pyodideInstance.globals.set("cli_args", finalArgs);
+    
+    try {
+      termInstance.write('\x1b[1;30mRunning CLI command...\x1b[0m\r\n');
+      
+      await window.pyodideInstance.runPythonAsync(`
+import sys
+from mrms_cli import cli
+
+old_stdout = sys.stdout
+old_stderr = sys.stderr
+
+class JSWriter:
+    def write(self, data):
+        import js
+        js.termWrite(data)
+    def flush(self):
+        pass
+
+sys.stdout = JSWriter()
+sys.stderr = JSWriter()
+
+try:
+    args_list = list(cli_args)
+    global img
+    cli.main(args=args_list, standalone_mode=False)
+except Exception as e:
+    sys.stderr.write(f"Error: {e}\n")
+finally:
+    sys.stdout = old_stdout
+    sys.stderr = old_stderr
+      `);
+      
+      await window.pyodideInstance.runPythonAsync(`
+import os
+import js
+files = os.listdir('.')
+for f in files:
+    if f.startswith('radar_') and f.endswith('.png'):
+        try:
+            with open(f, 'rb') as file_obj:
+                data = file_obj.read()
+                js.onPyodideFileGenerated(f, bytes(data))
+            os.remove(f)
+        except Exception as e:
+            js.termWrite(f"Map Redraw Error: {e}\n")
+      `);
+      
+    } catch (e) {
+      termInstance.writeln("\x1b[1;31mException: " + e.message + "\x1b[0m");
+    }
+  } else if (cmdName === 'clear') {
+    termInstance.clear();
+  } else if (cmdName === 'help') {
+    termInstance.writeln("Available commands:");
+    termInstance.writeln("  \x1b[1;33mmrms fetch [options]\x1b[0m         - Fetch a radar image (updates the Leaflet map)");
+    termInstance.writeln("  \x1b[1;33mmrms products [options]\x1b[0m      - List categories and products");
+    termInstance.writeln("  \x1b[1;33mclear\x1b[0m                        - Clear terminal screen");
+    termInstance.writeln("  \x1b[1;33mhelp\x1b[0m                         - Show this help message");
+  } else {
+    termInstance.writeln(`command not found: ${cmdName}`);
+  }
+  showTermPrompt();
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Init
