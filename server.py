@@ -5,10 +5,12 @@ Serves the Windy-style PWA frontend and a JSON API that wraps mrms_core.
 
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Query
 from fastapi.responses import Response, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from timezonefinder import TimezoneFinder
 
 from mrms_core import fetch_legend, fetch_radar, round_to_mrms_window
 
@@ -280,6 +282,46 @@ async def get_legend(
             "Cache-Control": "public, max-age=86400, immutable",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# API: timezone from geographic coordinates
+# ---------------------------------------------------------------------------
+
+_tf = TimezoneFinder()
+
+
+@app.get("/api/timezone")
+async def get_timezone(
+    lat: float = Query(..., description="Center latitude"),
+    lon: float = Query(..., description="Center longitude"),
+):
+    """Return the IANA timezone and current local time for a geographic point.
+
+    Uses timezonefinder to map lat/lon to an IANA timezone name, then
+    ``zoneinfo`` to compute the UTC offset, abbreviation, and local HH:MM.
+    """
+    tz_name = _tf.timezone_at(lat=lat, lng=lon)
+    if tz_name is None:
+        tz_name = _tf.timezone_at(lat=lat, lng=lon + 0.5) or _tf.timezone_at(lat=lat, lng=lon - 0.5)
+    if tz_name is None:
+        return JSONResponse(status_code=404, content={"error": "No timezone found for coordinates"})
+
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        return JSONResponse(status_code=404, content={"error": f"Invalid timezone: {tz_name}"})
+
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(tz)
+    offset_hours = now_local.utcoffset().total_seconds() / 3600
+
+    return {
+        "tz": tz_name,
+        "abbr": now_local.strftime("%Z"),
+        "offset_hours": offset_hours,
+        "local_time": now_local.strftime("%H:%M"),
+    }
 
 
 # ---------------------------------------------------------------------------

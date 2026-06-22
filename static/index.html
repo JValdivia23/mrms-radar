@@ -378,6 +378,7 @@
   <div class="time-display">
     <span class="live-dot" id="liveDot"></span>
     <span id="timeDisplay">--:--</span>
+    <span id="localTimeDisplay" style="display:none;margin-left:4px;font-size:13px"></span>
   </div>
 
   <div class="time-controls">
@@ -419,6 +420,8 @@ const S = {
   refreshTimer: null, animTimer: null, animFrame: 0,
   animCache: [], animRefreshTimer: null,
   baseMap: 'dark',
+  tz: null,          // {tz, abbr, offset_hours} from /api/timezone
+  tzLat: 0, tzLon: 0, // last lat/lon used to fetch timezone
 };
 const SLOTS = 48;
 const ANIM_FRAMES = 18;     // frames per animation loop
@@ -530,7 +533,17 @@ function updateTimeDisplay(ts){
   const parts = ts.split('T');
   if(parts.length<2) return;
   const t = parts[1].slice(0,5);
-  $('timeDisplay').textContent = t;
+  $('timeDisplay').textContent = t + ' UTC';
+  if(S.tz){
+    const [h,m] = t.split(':').map(Number);
+    const totalMins = h * 60 + m + S.tz.offset_hours * 60;
+    const localMins = ((totalMins % 1440) + 1440) % 1440;
+    const lh = Math.floor(localMins / 60), lm = localMins % 60;
+    $('localTimeDisplay').textContent = `(${String(lh).padStart(2,'0')}:${String(lm).padStart(2,'0')} ${S.tz.abbr})`;
+    $('localTimeDisplay').style.display = '';
+  } else {
+    $('localTimeDisplay').style.display = 'none';
+  }
   $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
 }
 
@@ -869,6 +882,7 @@ function onDragEnd(){
   if(S.mode === 'live') startAutoRefresh();
   syncMap();
   fetchImage();
+  updateTimezoneIfMoved();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -890,6 +904,22 @@ function getUserLocation(){
     );
   });
 }
+async function fetchTimezone(lat, lon){
+  try{
+    const r = await fetch(`/api/timezone?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`);
+    if(r.ok){
+      const data = await r.json();
+      S.tz = data;
+      S.tzLat = lat; S.tzLon = lon;
+      return;
+    }
+  }catch(e){ /* ignore */ }
+  S.tz = null;
+}
+async function updateTimezoneIfMoved(){
+  const moved = Math.abs(S.lat - S.tzLat) > 0.15 || Math.abs(S.lon - S.tzLon) > 0.15;
+  if(moved || !S.tz) await fetchTimezone(S.lat, S.lon);
+}
 function resetView(){
   getUserLocation().then(loc => {
     if(loc){ S.lat = loc.lat; S.lon = loc.lon; }
@@ -899,6 +929,7 @@ function resetView(){
     syncMap();
     stopAnimation(); fetchImage();
     if(S.mode === 'live') startAutoRefresh();
+    updateTimezoneIfMoved();
   });
 }
 
@@ -988,6 +1019,7 @@ async function init(){
   if(loc){ S.lat = loc.lat; S.lon = loc.lon; }
   await loadCategories();
   updateTimeLabels(); updateLivePauseBtn();
+  updateTimezoneIfMoved();
   fetchImage(); fetchLegend(); startAutoRefresh();
 }
 init();
