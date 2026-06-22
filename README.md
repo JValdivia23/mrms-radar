@@ -73,6 +73,23 @@ Fetches rendered PNGs from NOAA's MRMS Operational Product Viewer render endpoin
 
 Product cycles vary (e.g. 2, 5, or 60 minutes). The CLI queries [mrms_products.json](file:///Users/java1127/onedrive/Projects/radar_app/mrms_products.json) to dynamically round the requested time to the correct resolution boundary for that specific product.
 
+### Geographic Bounds Extraction
+Because the NOAA renderer operates in standard Web Mercator (`EPSG:3857`), the exact coordinate limits (min/max latitude and longitude bounds) of any fetched figure can be computed programmatically.
+
+The core library exposes a spatial utility function for this. You can call `.get_bounds()` on any fetched `RadarImage` to retrieve its geographic bounding box:
+
+```python
+from mrms_core import fetch_radar
+
+# Fetch default Denver image (zoom level 7, 920x630 pixels)
+img = fetch_radar()
+
+# Retrieve limits: (min_lat, max_lat, min_lon, max_lon)
+min_lat, max_lat, min_lon, max_lon = img.get_bounds()
+print(f"Latitude bounds : {min_lat:.5f}° to {max_lat:.5f}°")
+print(f"Longitude bounds: {min_lon:.5f}° to {max_lon:.5f}°")
+```
+
 ## Architecture
 
 ```

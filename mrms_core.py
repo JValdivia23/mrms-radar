@@ -87,6 +87,10 @@ class RadarImage:
     height: int = 630
     from_cache: bool = False
 
+    def get_bounds(self) -> tuple[float, float, float, float]:
+        """Return the geographic bounding box (min_lat, max_lat, min_lon, max_lon) for this image."""
+        return get_mercator_bounds(self.lat, self.lon, self.zoom, self.width, self.height)
+
 
 # ---------------------------------------------------------------------------
 # Time utilities
@@ -97,6 +101,42 @@ def round_to_mrms_window(dt: datetime, resolution_mins: int = 2) -> datetime:
     """Round a datetime down to the nearest MRMS window for the given resolution."""
     minute = (dt.minute // resolution_mins) * resolution_mins
     return dt.replace(minute=minute, second=0, microsecond=0)
+
+
+# ---------------------------------------------------------------------------
+# Spatial utilities
+# ---------------------------------------------------------------------------
+
+
+def get_mercator_bounds(
+    clat: float, clon: float, zoom: int, width: int, height: int
+) -> tuple[float, float, float, float]:
+    """Calculate the geographic bounding box (min_lat, max_lat, min_lon, max_lon)
+    for a viewport with center (clat, clon), Leaflet zoom level, and pixel dimensions.
+    Uses standard Web Mercator (EPSG:3857) formulas.
+    """
+    import math
+    clat_rad = math.radians(clat)
+    
+    center_x = (clon + 180.0) / 360.0
+    center_y = (1.0 - math.log(math.tan(clat_rad) + 1.0 / math.cos(clat_rad)) / math.pi) / 2.0
+    
+    map_size = 256.0 * (2.0 ** zoom)
+    
+    left_x = (center_x * map_size - (width / 2.0)) / map_size
+    right_x = (center_x * map_size + (width / 2.0)) / map_size
+    top_y = (center_y * map_size - (height / 2.0)) / map_size
+    bottom_y = (center_y * map_size + (height / 2.0)) / map_size
+    
+    def x_to_lon(x):
+        return x * 360.0 - 180.0
+        
+    def y_to_lat(y):
+        val = math.pi * (1.0 - 2.0 * y)
+        lat_rad = 2.0 * math.atan(math.exp(val)) - math.pi / 2.0
+        return math.degrees(lat_rad)
+        
+    return y_to_lat(bottom_y), y_to_lat(top_y), x_to_lon(left_x), x_to_lon(right_x)
 
 
 

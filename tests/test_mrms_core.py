@@ -97,6 +97,40 @@ def test_round_to_mrms_window_midnight():
 
 
 # ============================================================================
+# Spatial utilities
+# ============================================================================
+
+
+def test_get_mercator_bounds_zoom0():
+    """Verify that at zoom 0, a 256x256 image centered at (0, 0) covers the whole Earth projection bounds."""
+    from mrms_core import get_mercator_bounds
+    min_lat, max_lat, min_lon, max_lon = get_mercator_bounds(0, 0, 0, 256, 256)
+    
+    assert abs(min_lon - (-180.0)) < 1e-7
+    assert abs(max_lon - 180.0) < 1e-7
+    assert abs(min_lat - (-85.05112878)) < 1e-6
+    assert abs(max_lat - 85.05112878) < 1e-6
+
+
+def test_radar_image_get_bounds():
+    """RadarImage get_bounds method successfully forwards to get_mercator_bounds."""
+    img = RadarImage(
+        png_bytes=b"png",
+        product="M3DL13",
+        lat=40.55,
+        lon=-104.68,
+        zoom=7,
+        width=920,
+        height=630,
+    )
+    min_lat, max_lat, min_lon, max_lon = img.get_bounds()
+    assert 37.86 < min_lat < 37.87
+    assert 43.12 < max_lat < 43.13
+    assert -109.74 < min_lon < -109.73
+    assert -99.63 < max_lon < -99.62
+
+
+# ============================================================================
 # Cache utilities
 # ============================================================================
 
