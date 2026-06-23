@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>MRMS Radar</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --panel-bg:rgba(18,20,26,.68);
+    --panel-border:rgba(255,255,255,.06);
+    --text:#e8eaed;
+    --text-muted:#8b9098;
+    --accent:#5b9ef5;
+    --danger:#f0625c;
+    --radius:14px;
+    --blur:18px;
+  }
+
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0d1117;
+    color:var(--text);
+    overflow:hidden;
+    height:100dvh;width:100vw;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;-webkit-user-select:none;
+  }
+
+  /* ── Map ── */
+  .map-container{
+    position:fixed;inset:0;
+    overflow:hidden;
+    cursor:grab;
+    background:#0a0e14;
+  }
+  .map-container:active,.map-container.dragging{cursor:grabbing}
+
+  #leafletMap{
+    position:absolute;top:50%;left:50%;
+    width:920px;height:630px;
+    transform:translate(-50%,-50%);
+    transform-origin:center center;
+    pointer-events:none;
+  }
+
+  .map-loading,.map-error{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+    z-index:10;transition:opacity .25s;
+  }
+  .map-loading{color:var(--text-muted);font-size:14px;pointer-events:none}
+  .map-loading.hidden{opacity:0}
+  .map-error{display:none;color:var(--danger);font-size:14px;text-align:center;
+    background:rgba(0,0,0,.7);padding:24px 32px;border-radius:12px;max-width:300px}
+  .map-error.show{display:flex}
+
+  .anim-loading{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(0,0,0,.85);padding:20px 32px;border-radius:14px;
+    z-index:20;display:none;flex-direction:column;align-items:center;gap:12px;
+    pointer-events:none;
+  }
+  .anim-loading.show{display:flex}
+  .anim-loading .spinner{width:32px;height:32px}
+  .anim-loading .progress{font-size:13px;color:var(--text-muted)}
+
+  .spinner{
+    width:28px;height:28px;
+    border:3px solid rgba(255,255,255,.1);
+    border-top-color:var(--accent);
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Floating panels ── */
+  .floating{
+    position:fixed;
+    background:var(--panel-bg);
+    backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    z-index:100;
+    transition:opacity .3s,transform .3s;
+  }
+
+  /* ── Corner buttons ── */
+  .corner-btn{
+    position:fixed;
+    top:max(12px,env(safe-area-inset-top));
+    width:38px;height:38px;border-radius:50%;
+    border:1px solid var(--panel-border);
+    background:var(--panel-bg);
+    backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    color:var(--text);font-size:18px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    z-index:100;
+  }
+  .corner-btn.left{left:12px}
+  .corner-btn.right{right:12px}
+
+  .icon-btn{
+    width:38px;height:38px;border-radius:50%;border:none;
+    background:transparent;color:var(--text);font-size:18px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:background .15s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.06)}
+  .icon-btn:active{background:rgba(255,255,255,.12)}
+
+  /* ── Side panel ── */
+  .side-panel{
+    position:fixed;top:0;left:0;bottom:0;
+    width:min(340px,88vw);
+    background:var(--panel-bg);
+    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-right:1px solid var(--panel-border);
+    z-index:200;
+    padding:max(18px,env(safe-area-inset-top)) 18px 18px;
+    transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:20px;
+  }
+  .side-panel.open{transform:translateX(0)}
+
+  .panel-header{display:flex;align-items:center;justify-content:space-between}
+  .panel-header h2{font-size:18px;font-weight:600}
+
+  .section-label{
+    font-size:10px;text-transform:uppercase;letter-spacing:1.2px;
+    color:var(--text-muted);margin-bottom:6px;
+  }
+
+  /* Select styling */
+  select{
+    width:100%;background:rgba(255,255,255,.05);
+    border:1px solid var(--panel-border);border-radius:10px;
+    color:var(--text);padding:12px 14px;font-size:14px;outline:none;
+    -webkit-appearance:none;appearance:none;
+    cursor:pointer;
+  }
+  select option{background:#181a22;color:var(--text)}
+
+  /* Level slider */
+  .level-slider-wrap{margin-top:4px}
+  .level-value{
+    text-align:center;font-size:24px;font-weight:300;
+    color:var(--accent);margin-bottom:4px;
+  }
+  input[type=range]{
+    width:100%;-webkit-appearance:none;
+    height:4px;background:rgba(255,255,255,.1);
+    border:none;border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--accent);cursor:pointer;
+    box-shadow:0 0 16px rgba(91,158,245,.4);
+  }
+  .level-labels{
+    display:flex;justify-content:space-between;
+    font-size:10px;color:var(--text-muted);margin-top:2px;
+  }
+
+  .backdrop{
+    position:fixed;inset:0;z-index:150;
+    background:rgba(0,0,0,.45);
+    opacity:0;pointer-events:none;transition:opacity .28s;
+  }
+  .backdrop.show{opacity:1;pointer-events:auto}
+
+  /* ── Bottom bar ── */
+  .bottom-bar{
+    bottom:max(16px,env(safe-area-inset-bottom));
+    left:50%;transform:translateX(-50%);
+    padding:12px 18px;
+    display:flex;flex-direction:column;gap:10px;
+    min-width:min(420px,92vw);
+  }
+
+  /* Current product badge */
+  .product-badge{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--text-muted);
+  }
+  .product-badge strong{color:var(--text);font-weight:500}
+
+  /* Time */
+  .time-controls{display:flex;align-items:center;gap:10px}
+  .time-nav{
+    width:34px;height:34px;border-radius:50%;border:1px solid var(--panel-border);
+    background:rgba(255,255,255,.05);color:var(--text);
+    font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    transition:background .15s;
+  }
+  .time-nav:hover{background:rgba(255,255,255,.1)}
+  .time-nav.now-btn{width:auto;padding:0 12px;border-radius:16px;font-size:11px;font-weight:700}
+
+  .time-display{
+    text-align:center;font-size:28px;font-weight:300;letter-spacing:-.5px;
+    font-variant-numeric:tabular-nums;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .live-dot{
+    display:inline-block;width:7px;height:7px;
+    background:var(--danger);border-radius:50%;
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .time-slider-wrap{flex:1;min-width:0}
+  .time-labels{
+    display:flex;justify-content:space-between;
+    font-size:10px;color:var(--text-muted);margin-top:2px;
+  }
+
+  /* ── Zoom stack (desktop) ── */
+  .zoom-stack{
+    position:fixed;right:12px;top:50%;transform:translateY(-50%);
+    z-index:100;display:flex;flex-direction:column;gap:4px;
+  }
+  .zoom-btn{
+    width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--panel-border);
+    background:var(--panel-bg);backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    color:var(--text);font-size:18px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* ── Colorbar ── */
+  .colorbar{
+    position:fixed;right:56px;top:50%;transform:translateY(-50%);
+    width:36px;height:220px;
+    background:rgba(255,255,255,.62);
+    backdrop-filter:blur(var(--blur));
+    -webkit-backdrop-filter:blur(var(--blur));
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    z-index:100;
+    display:flex;
+    padding:0;
+    transition:opacity .3s;
+  }
+  .colorbar.hidden{opacity:0;pointer-events:none}
+  .colorbar-img{
+    width:100%;height:100%;object-fit:contain;
+  }
+
+  /* ── Responsive ── */
+  @media(max-width:640px){
+    .bottom-bar{min-width:auto;left:12px;right:12px;transform:none;padding:10px 14px}
+    .time-display{font-size:22px}
+    .side-panel{width:100vw}
+    .zoom-stack{right:6px;gap:2px}
+    .zoom-btn{width:30px;height:30px;font-size:16px}
+    .level-value{font-size:20px}
+    .colorbar{right:44px;width:28px;height:180px;top:50%;transform:translateY(-50%)}
+  }
+</style>
+</head>
+<body>
+
+<!-- Map -->
+<div class="map-container" id="mapContainer">
+  <div id="leafletMap"></div>
+  <img class="map-image" id="mapImage" alt="" draggable="false" style="display:none">
+  <div class="map-loading" id="mapLoading">
+    <div class="spinner"></div>
+    <span>Loading radar...</span>
+  </div>
+  <div class="map-error" id="mapError">
+    <span style="font-size:40px">⚠</span>
+    <span>Failed to load radar image</span>
+    <span style="font-size:11px;opacity:.7">Check that the server is running</span>
+  </div>
+  <div class="anim-loading" id="animLoading">
+    <div class="spinner"></div>
+    <span class="progress" id="animProgress">Loading radar loop...</span>
+  </div>
+</div>
+
+<!-- Backdrop -->
+<div class="backdrop" id="backdrop" onclick="closePanel()"></div>
+
+<!-- Side panel -->
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <h2>MRMS <span style="color:var(--accent)">Radar</span></h2>
+    <button class="icon-btn" onclick="closePanel()">✕</button>
+  </div>
+
+  <!-- Category -->
+  <div>
+    <div class="section-label">Product</div>
+    <select id="categorySelect"></select>
+  </div>
+
+  <!-- Level sub-selector (shown for 3D products) -->
+  <div id="levelSection" style="display:none">
+    <div class="section-label">Altitude</div>
+    <div class="level-slider-wrap">
+      <div class="level-value" id="levelValue">4.0 km</div>
+      <input type="range" id="levelSlider">
+      <div class="level-labels">
+        <span id="levelMin">0.5 km</span>
+        <span id="levelMax">19 km</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sub-product selector (for non-level categories) -->
+  <div id="subProductSection" style="display:none">
+    <div class="section-label">Variant</div>
+    <select id="subProductSelect"></select>
+  </div>
+
+  <!-- Zoom -->
+  <div>
+    <div class="section-label">Zoom Level</div>
+    <input type="range" min="3" max="12" value="7" id="zoomSlider">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+      <span>Continent</span><span>State</span><span>City</span>
+    </div>
+  </div>
+
+  <!-- Base Map -->
+  <div>
+    <div class="section-label">Base Map</div>
+    <select id="baseMapSelect">
+      <option value="osm">Mapnik</option>
+      <option value="satellite">Satellite</option>
+      <option value="dark" selected>Dark</option>
+    </select>
+  </div>
+
+  <!-- Opacity -->
+  <div>
+    <div class="section-label">Radar Opacity</div>
+    <input type="range" min="10" max="100" value="100" id="opacitySlider">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+      <span>10%</span><span>100%</span>
+    </div>
+  </div>
+</div>
+
+<!-- Corner buttons -->
+<button class="corner-btn left" onclick="openPanel()">☰</button>
+<button class="corner-btn right" onclick="resetView()">⌂</button>
+
+<!-- Zoom -->
+<div class="zoom-stack">
+  <button class="zoom-btn" onclick="changeZoom(1)">+</button>
+  <button class="zoom-btn" onclick="changeZoom(-1)">−</button>
+</div>
+
+<!-- Colorbar -->
+<div class="colorbar" id="colorbarPanel">
+  <img class="colorbar-img" id="legendBar" alt="Color scale">
+</div>
+
+<!-- Bottom bar -->
+<div class="floating bottom-bar">
+  <div class="product-badge" id="productBadge">
+    <strong>Refl</strong> 4.0 km
+  </div>
+
+  <div class="time-display">
+    <span class="live-dot" id="liveDot"></span>
+    <span id="timeDisplay">--:--</span>
+    <span id="localTimeDisplay" style="display:none;margin-left:4px;font-size:13px"></span>
+  </div>
+
+  <div class="time-controls">
+    <button class="time-nav" onclick="stepTime(1)" title="-2 min">◀</button>
+    <div class="time-slider-wrap">
+      <input type="range" min="0" max="48" value="48" id="timeSlider">
+      <div class="time-labels">
+        <span id="labelStart">--:--</span>
+        <span id="labelEnd">NOW</span>
+      </div>
+    </div>
+    <button class="time-nav" onclick="stepTime(-1)" title="+2 min">▶</button>
+    <button class="time-nav now-btn" id="livePauseBtn" onclick="toggleLivePause()">⏸</button>
+    <button class="time-nav now-btn" onclick="goLive()">NOW</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Service Worker
+// ═══════════════════════════════════════════════════════════════════════════
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shortcuts (must be defined before any usage)
+// ═══════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════
+const S = {
+  categoryIdx: 0,      // index into categories[]
+  levelIdx: 0,         // index into category.products[]
+  zoom: localStorage.getItem('mrms_zoom') ? parseInt(localStorage.getItem('mrms_zoom')) : 7,
+  lat: localStorage.getItem('mrms_lat') ? parseFloat(localStorage.getItem('mrms_lat')) : 40.55,
+  lon: localStorage.getItem('mrms_lon') ? parseFloat(localStorage.getItem('mrms_lon')) : -104.68,
+  timeSlot: 0, mode: 'live',
+  refreshTimer: null, animTimer: null, animFrame: 0,
+  animCache: [], animRefreshTimer: null,
+  baseMap: localStorage.getItem('mrms_basemap') || 'dark',
+  tz: null,          // {tz, abbr, offset_hours} from /api/timezone
+  tzLat: 0, tzLon: 0, // last lat/lon used to fetch timezone
+};
+const SLOTS = 48;
+const ANIM_FRAMES = 18;     // frames per animation loop
+const ANIM_STEP = 2;        // slots per frame (4 min)
+const ANIM_DURATION = 5000; // ms for full loop
+const ANIM_INTERVAL = Math.floor(ANIM_DURATION / ANIM_FRAMES);
+const MAX_ANIM_SLOT = (ANIM_FRAMES - 1) * ANIM_STEP;  // 34 — maps last frame to slot 0 (now)
+
+const BASEMAPS = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Esri, Maxar, Earthstar Geographics',
+  }),
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, &copy; <a href="https://carto.com/">CARTO</a>',
+  }),
+};
+let leafletMap;
+
+let categories = [];
+let dragX = 0, dragY = 0;
+let isDragging, dx0, dy0;
+let zoomPending = 0, zoomDebounce = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Derived
+// ═══════════════════════════════════════════════════════════════════════════
+function cat()    { return categories[S.categoryIdx]; }
+function product(){ return cat() ? cat().products[S.levelIdx] : null; }
+function prodCode(){ const p = product(); return p ? p.code : 'M3DL13'; }
+function saveSettings(){
+  localStorage.setItem('mrms_lat', S.lat);
+  localStorage.setItem('mrms_lon', S.lon);
+  localStorage.setItem('mrms_zoom', S.zoom);
+  localStorage.setItem('mrms_basemap', S.baseMap);
+  const c = cat();
+  const p = product();
+  if(c) localStorage.setItem('mrms_category_code', c.code);
+  if(p) localStorage.setItem('mrms_product_code', p.code);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════════════
+function radarUrl(meta=false){
+  const p = new URLSearchParams({
+    product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
+    width: 920, height: 630,
+  });
+  if(S.mode !== 'live'){
+    const d = roundSlot(new Date());
+    d.setMinutes(d.getMinutes() - S.timeSlot * 2);
+    p.set('time', d.toISOString().slice(0,16));
+  }
+  if(meta) p.set('meta','true');
+  return '/api/radar?'+p;
+}
+function roundSlot(d){
+  const m = Math.floor(d.getUTCMinutes()/2)*2;
+  return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),d.getUTCHours(),m,0,0));
+}
+
+function radarUrlForSlot(slot){
+  const p = new URLSearchParams({
+    product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
+    width: 920, height: 630,
+  });
+  const d = roundSlot(new Date());
+  d.setMinutes(d.getMinutes() - slot * 2);
+  p.set('time', d.toISOString().slice(0,16));
+  return '/api/radar?'+p;
+}
+
+function legendUrl(){
+  return '/api/legend?product=' + prodCode();
+}
+async function fetchLegend(){
+  try{
+    const r = await fetch(legendUrl());
+    if(!r.ok){ $('colorbarPanel').classList.add('hidden'); return; }
+    const svg = await r.text();
+    if(!svg.includes('<svg')){ $('colorbarPanel').classList.add('hidden'); return; }
+    const blob = new Blob([svg], {type:'image/svg+xml'});
+    if($('legendBar').src.startsWith('blob:')) URL.revokeObjectURL($('legendBar').src);
+    $('legendBar').src = URL.createObjectURL(blob);
+    $('colorbarPanel').classList.remove('hidden');
+  }catch(e){
+    $('colorbarPanel').classList.add('hidden');
+  }
+}
+
+async function fetchImage(){
+  fetchLegend();
+  const url = radarUrl();
+  $('mapLoading').classList.remove('hidden');
+  $('mapError').classList.remove('show');
+  try{
+    const r = await fetch(url);
+    if(!r.ok) throw Error('HTTP '+r.status);
+    const blob = await r.blob();
+    updateRadarOverlay(URL.createObjectURL(blob));
+    $('mapLoading').classList.add('hidden');
+    syncMap();
+    const ts = r.headers.get('X-MRMS-Timestamp')||'';
+    updateTimeDisplay(ts);
+  }catch(e){
+    console.error(e);
+    $('mapLoading').querySelector('span').textContent='Retrying...';
+    setTimeout(fetchImage,3000);
+  }
+}
+
+function updateTimeDisplay(ts){
+  const parts = ts.split('T');
+  if(parts.length<2) return;
+  const t = parts[1].slice(0,5);
+  $('timeDisplay').textContent = t + ' UTC';
+  if(S.tz){
+    const [h,m] = t.split(':').map(Number);
+    const totalMins = h * 60 + m + S.tz.offset_hours * 60;
+    const localMins = ((totalMins % 1440) + 1440) % 1440;
+    const lh = Math.floor(localMins / 60), lm = localMins % 60;
+    $('localTimeDisplay').textContent = `(${String(lh).padStart(2,'0')}:${String(lm).padStart(2,'0')} ${S.tz.abbr})`;
+    $('localTimeDisplay').style.display = '';
+  } else {
+    $('localTimeDisplay').style.display = 'none';
+  }
+  $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Product catalog loading
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadCategories(){
+  try{
+    const r = await fetch('/api/products');
+    categories = await r.json();
+  }catch(e){
+    // fallback
+    categories = [{code:'level',name:'3D Reflectivity',default_product:'M3DL13',
+      has_levels:true,level_suffix:'km',
+      products:[{code:'M3DL1',name:'0.5 km'},{code:'M3DL7',name:'2.0 km'},{code:'M3DL13',name:'4.0 km'}]},
+      {code:'brefls',name:'Base Reflectivity',default_product:'BREF',has_levels:false,
+        products:[{code:'BREF',name:'Base Reflectivity'}]}];
+  }
+  // Set default: Composite Reflectivity (crefls), or loaded from local storage
+  const savedCatCode = localStorage.getItem('mrms_category_code') || 'crefls';
+  const savedProdCode = localStorage.getItem('mrms_product_code') || 'CREF';
+
+  S.categoryIdx = categories.findIndex(c=>c.code===savedCatCode);
+  if(S.categoryIdx<0) S.categoryIdx = categories.findIndex(c=>c.code==='crefls');
+  if(S.categoryIdx<0) S.categoryIdx = 0;
+  
+  const c = cat();
+  S.levelIdx = c.products.findIndex(p=>p.code===savedProdCode);
+  if(S.levelIdx<0) S.levelIdx = c.products.findIndex(p=>p.code===c.default_product);
+  if(S.levelIdx<0) S.levelIdx = 0;
+
+  renderCategorySelect();
+  renderLevelSelector();
+  updateProductBadge();
+}
+
+function renderCategorySelect(){
+  const sel = $('categorySelect');
+  sel.innerHTML = categories.map((c,i)=>
+    `<option value="${i}"${i===S.categoryIdx?' selected':''}>${c.name}</option>`
+  ).join('');
+  sel.onchange = ()=>{
+    S.categoryIdx = parseInt(sel.value);
+    const c = cat();
+    S.levelIdx = c.products.findIndex(p=>p.code===c.default_product);
+    if(S.levelIdx<0) S.levelIdx=0;
+    renderLevelSelector();
+    updateProductBadge();
+    saveSettings();
+    fetchImage();
+  };
+}
+
+function renderLevelSelector(){
+  const c = cat();
+  if(!c) return;
+
+  if(c.has_levels){
+    $('levelSection').style.display = 'block';
+    $('subProductSection').style.display = 'none';
+
+    const slider = $('levelSlider');
+    slider.min = 0;
+    slider.max = c.products.length - 1;
+    slider.value = S.levelIdx;
+    slider.oninput = ()=>{
+      S.levelIdx = parseInt(slider.value);
+      $('levelValue').textContent = c.products[S.levelIdx].name;
+    };
+    slider.onchange = ()=>{
+      updateProductBadge();
+      saveSettings();
+      fetchImage();
+    };
+
+    $('levelValue').textContent = c.products[S.levelIdx].name;
+    $('levelMin').textContent = c.products[0].name;
+    $('levelMax').textContent = c.products[c.products.length-1].name;
+  } else {
+    $('levelSection').style.display = 'none';
+    $('subProductSection').style.display = 'block';
+
+    const sel = $('subProductSelect');
+    sel.innerHTML = c.products.map((p,i)=>
+      `<option value="${i}"${i===S.levelIdx?' selected':''}>${p.name}</option>`
+    ).join('');
+    sel.onchange = ()=>{
+      S.levelIdx = parseInt(sel.value);
+      updateProductBadge();
+      saveSettings();
+      fetchImage();
+    };
+  }
+}
+
+function updateProductBadge(){
+  const c = cat();
+  const p = product();
+  if(!c||!p) return;
+  $('productBadge').innerHTML = `<strong>${c.name}</strong> ${p.name}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Time
+// ═══════════════════════════════════════════════════════════════════════════
+function updateTimeLabels(){
+  const now = roundSlot(new Date());
+  const start = new Date(now.getTime() - SLOTS*2*60000);
+  const fmt = d=>`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+  $('labelStart').textContent = fmt(start);
+  $('labelEnd').textContent = S.mode === 'live' ? 'NOW' : fmt(new Date(now.getTime()));
+  $('timeSlider').value = SLOTS - S.timeSlot;
+}
+
+function stepTime(n){
+  stopAnimation();
+  S.timeSlot = Math.max(0, Math.min(SLOTS, S.timeSlot + n));
+  S.mode = S.timeSlot === 0 ? 'live' : 'paused';
+  if(S.mode === 'live') startAutoRefresh();
+  $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
+  updateLivePauseBtn();
+  updateTimeLabels();
+  fetchImage();
+}
+function goLive(){
+  stopAnimation();
+  S.timeSlot = 0; S.mode = 'live';
+  $('liveDot').style.display = 'inline-block';
+  updateLivePauseBtn();
+  updateTimeLabels();
+  fetchImage();
+  startAutoRefresh();
+}
+function toggleLivePause(){
+  if(S.mode === 'playing'){
+    stopAnimation();
+  } else {
+    startAnimation();
+  }
+}
+function updateLivePauseBtn(){
+  $('livePauseBtn').textContent = S.mode === 'playing' ? '⏸' : '⏯';
+}
+function startAnimation(){
+  stopAutoRefresh();
+  stopAnimation();
+  S.mode = 'playing';
+  S.animFrame = 0;
+  S.animCache = [];
+  $('liveDot').style.display = 'none';
+  updateLivePauseBtn();
+  preloadAnimFrames().then(()=>{
+    if(S.mode !== 'playing') return;
+    stepAnimFrame();
+    startAnimRefresh();
+  });
+}
+async function preloadAnimFrames(){
+  $('animLoading').classList.add('show');
+  $('animProgress').textContent = 'Loading radar loop...';
+  const fetches = [];
+  for(let f = 0; f < ANIM_FRAMES; f++){
+    const slot = MAX_ANIM_SLOT - f * ANIM_STEP;
+    fetches.push(
+      fetch(radarUrlForSlot(slot)).then(async r => {
+        const blob = await r.blob();
+        const ts = r.headers.get('X-MRMS-Timestamp')||'';
+        return {blob, ts};
+      }).catch(e => {
+        console.error('Anim preload error frame '+f, e);
+        return {blob: null, ts: ''};
+      })
+    );
+  }
+  const results = await Promise.all(fetches);
+  S.animCache = results;
+  $('animLoading').classList.remove('show');
+}
+function stopAnimation(){
+  if(S.animTimer){ clearTimeout(S.animTimer); S.animTimer = null; }
+  stopAnimRefresh();
+  if(S.mode === 'playing') S.mode = 'paused';
+  updateLivePauseBtn();
+  cleanupAnimBlobs();
+}
+function stepAnimFrame(){
+  if(S.mode !== 'playing') return;
+  S.timeSlot = MAX_ANIM_SLOT - S.animFrame * ANIM_STEP;
+  updateTimeLabels();
+  const frame = S.animCache[S.animFrame];
+  if(frame && frame.blob){
+    updateRadarOverlay(URL.createObjectURL(frame.blob));
+    $('mapLoading').classList.add('hidden');
+    updateTimeDisplay(frame.ts);
+    syncMap();
+  }
+  S.animFrame = (S.animFrame + 1) % ANIM_FRAMES;
+  if(S.mode === 'playing') S.animTimer = setTimeout(stepAnimFrame, ANIM_INTERVAL);
+}
+function startAnimRefresh(){
+  stopAnimRefresh();
+  S.animRefreshTimer = setInterval(refreshNewestFrames, 120000);
+}
+function stopAnimRefresh(){
+  if(S.animRefreshTimer){ clearInterval(S.animRefreshTimer); S.animRefreshTimer = null; }
+}
+async function refreshNewestFrames(){
+  if(S.mode !== 'playing') return;
+  const newestIdx = [15, 16, 17];
+  const fetches = newestIdx.map(idx => {
+    const slot = MAX_ANIM_SLOT - idx * ANIM_STEP;
+    return fetch(radarUrlForSlot(slot)).then(async r => {
+      const blob = await r.blob();
+      const ts = r.headers.get('X-MRMS-Timestamp')||'';
+      return {idx, blob, ts};
+    }).catch(e => ({idx, blob: null, ts: ''}));
+  });
+  const results = await Promise.all(fetches);
+  for(const {idx, blob, ts} of results){
+    if(blob) S.animCache[idx] = {blob, ts};
+  }
+}
+function cleanupAnimBlobs(){
+  S.animCache = [];
+}
+$('timeSlider').oninput = ()=>{
+  stopAnimation();
+  S.timeSlot = SLOTS - parseInt($('timeSlider').value);
+  S.mode = S.timeSlot === 0 ? 'live' : 'paused';
+  $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
+  updateLivePauseBtn();
+  updateTimeLabels();
+};
+$('timeSlider').onchange = ()=> fetchImage();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zoom (NOAA level)
+// ═══════════════════════════════════════════════════════════════════════════
+$('zoomSlider').onchange = ()=>{
+  stopAnimation();
+  S.zoom = parseInt($('zoomSlider').value);
+  saveSettings();
+  fetchImage();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Auto-refresh (runs only in live mode and when not paused)
+// ═══════════════════════════════════════════════════════════════════════════
+function startAutoRefresh(){
+  stopAutoRefresh();
+  S.refreshTimer = setInterval(()=>{ if(S.mode === 'live') fetchImage(); }, 120000);
+}
+function stopAutoRefresh(){
+  if(S.refreshTimer){ clearInterval(S.refreshTimer); S.refreshTimer = null; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Map pan / pinch / wheel (server-side zoom + lat/lon)
+// ═══════════════════════════════════════════════════════════════════════════
+function changeZoom(delta){
+  stopAnimation();
+  zoomPending = Math.sign(zoomPending + delta);
+  clearTimeout(zoomDebounce);
+  zoomDebounce = setTimeout(()=>{
+    S.zoom = Math.max(3, Math.min(12, S.zoom + zoomPending));
+    zoomPending = 0;
+    $('zoomSlider').value = S.zoom;
+    syncMap();
+    saveSettings();
+    fetchImage();
+  }, 300);
+}
+
+$('mapContainer').addEventListener('mousedown',e=>{
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  e.preventDefault(); isDragging=true;
+  $('mapContainer').classList.add('dragging');
+  dx0 = e.clientX; dy0 = e.clientY;
+  dragX = dragY = 0;
+});
+$('mapContainer').addEventListener('mousemove',e=>{
+  if(!isDragging) return; e.preventDefault();
+  dragX = e.clientX - dx0;
+  dragY = e.clientY - dy0;
+});
+$('mapContainer').addEventListener('mouseup',()=>{
+  if(!isDragging) return;
+  onDragEnd();
+});
+$('mapContainer').addEventListener('mouseleave',()=>{
+  if(!isDragging) return;
+  onDragEnd();
+});
+
+let pinchBase = 0, pinchAccum = 0;
+$('mapContainer').addEventListener('touchstart',e=>{
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  e.preventDefault();
+  if(e.touches.length === 2){
+    isDragging = false;
+    pinchBase = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    pinchAccum = 0;
+    return;
+  }
+  isDragging = true;
+  $('mapContainer').classList.add('dragging');
+  dx0 = e.touches[0].clientX; dy0 = e.touches[0].clientY;
+  dragX = dragY = 0;
+},{passive:false});
+$('mapContainer').addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(e.touches.length === 2 && pinchBase > 0){
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    const scale = d / pinchBase;
+    if(scale > 1.4){ pinchAccum++; pinchBase = d; }
+    if(scale < 0.7){ pinchAccum--; pinchBase = d; }
+    if(pinchAccum !== 0){ changeZoom(pinchAccum); pinchAccum = 0; }
+    return;
+  }
+  if(!isDragging) return;
+  dragX = e.touches[0].clientX - dx0;
+  dragY = e.touches[0].clientY - dy0;
+},{passive:false});
+$('mapContainer').addEventListener('touchend',()=>{
+  if(isDragging) onDragEnd();
+  isDragging = false;
+  $('mapContainer').classList.remove('dragging');
+  pinchBase = 0; pinchAccum = 0;
+});
+$('mapContainer').addEventListener('dblclick',e=>e.preventDefault());
+
+$('mapContainer').addEventListener('wheel',e=>{
+  if(e.target.closest('.side-panel,.floating,.backdrop,.zoom-stack')) return;
+  e.preventDefault();
+  changeZoom(e.deltaY < 0 ? 1 : -1);
+},{passive:false});
+
+function onDragEnd(){
+  isDragging = false;
+  $('mapContainer').classList.remove('dragging');
+  if(dragX === 0 && dragY === 0) return;
+  const degPerPx = 360 / (256 * Math.pow(2, S.zoom));
+  S.lon -= dragX * degPerPx;
+  S.lat += dragY * degPerPx / Math.cos(S.lat * Math.PI / 180);
+  dragX = dragY = 0;
+  stopAnimation();
+  if(S.mode === 'live') startAutoRefresh();
+  syncMap();
+  saveSettings();
+  fetchImage();
+  updateTimezoneIfMoved();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Side panel
+// ═══════════════════════════════════════════════════════════════════════════
+function openPanel(){ $('sidePanel').classList.add('open'); $('backdrop').classList.add('show'); }
+function closePanel(){ $('sidePanel').classList.remove('open'); $('backdrop').classList.remove('show'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+function getUserLocation(){
+  return new Promise((resolve) => {
+    if(!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({lat: pos.coords.latitude, lon: pos.coords.longitude}),
+      () => resolve(null),
+      {timeout: 5000, maximumAge: 600000}
+    );
+  });
+}
+async function fetchTimezone(lat, lon){
+  try{
+    const r = await fetch(`/api/timezone?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`);
+    if(r.ok){
+      const data = await r.json();
+      S.tz = data;
+      S.tzLat = lat; S.tzLon = lon;
+      return;
+    }
+  }catch(e){ /* ignore */ }
+  S.tz = null;
+}
+async function updateTimezoneIfMoved(){
+  const moved = Math.abs(S.lat - S.tzLat) > 0.15 || Math.abs(S.lon - S.tzLon) > 0.15;
+  if(moved || !S.tz) await fetchTimezone(S.lat, S.lon);
+}
+function resetView(){
+  getUserLocation().then(loc => {
+    if(loc){ S.lat = loc.lat; S.lon = loc.lon; }
+    S.zoom = 7;
+    $('zoomSlider').value = 7;
+    dragX = dragY = 0;
+    syncMap();
+    saveSettings();
+    stopAnimation(); fetchImage();
+    if(S.mode === 'live') startAutoRefresh();
+    updateTimezoneIfMoved();
+  });
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closePanel();
+  if(e.key==='+'||e.key==='=') changeZoom(1);
+  if(e.key==='-') changeZoom(-1);
+  if(e.key==='ArrowLeft') stepTime(1);
+  if(e.key==='ArrowRight') stepTime(-1);
+  if(e.key==='0') resetView();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Leaflet background map
+// ═══════════════════════════════════════════════════════════════════════════
+let radarOverlay = null;
+
+function initLeaflet(){
+  if(leafletMap) return;
+  leafletMap = L.map('leafletMap', {
+    center: [S.lat, S.lon],
+    zoom: S.zoom,
+    zoomControl: false,
+    attributionControl: false,
+    dragging: false,
+    touchZoom: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false,
+  });
+  BASEMAPS[S.baseMap].addTo(leafletMap);
+}
+function syncMap(){
+  if(!leafletMap) return;
+  leafletMap.setView([S.lat, S.lon], S.zoom, {animate: false});
+}
+function switchBaseMap(key){
+  if(!leafletMap || key === S.baseMap) return;
+  leafletMap.removeLayer(BASEMAPS[S.baseMap]);
+  BASEMAPS[key].addTo(leafletMap);
+  S.baseMap = key;
+  saveSettings();
+}
+function scaleLeafletMap(){
+  const c = $('mapContainer');
+  const scale = Math.max(c.clientWidth / 920, c.clientHeight / 630);
+  $('leafletMap').style.transform = `translate(-50%,-50%) scale(${scale})`;
+}
+function getRadarBounds(){
+  const px = leafletMap.project([S.lat, S.lon], S.zoom);
+  const nw = L.point(px.x - 460, px.y - 315);
+  const se = L.point(px.x + 460, px.y + 315);
+  return L.latLngBounds(
+    leafletMap.unproject(nw, S.zoom),
+    leafletMap.unproject(se, S.zoom)
+  );
+}
+function updateRadarOverlay(imageUrl){
+  if(!leafletMap) return;
+  const bounds = getRadarBounds();
+  if(radarOverlay){
+    radarOverlay.setUrl(imageUrl);
+    radarOverlay.setBounds(bounds);
+  } else {
+    radarOverlay = L.imageOverlay(imageUrl, bounds, {
+      opacity: $('opacitySlider').value / 100,
+    }).addTo(leafletMap);
+  }
+}
+
+$('opacitySlider').oninput = ()=>{
+  if(radarOverlay) radarOverlay.setOpacity($('opacitySlider').value / 100);
+};
+$('baseMapSelect').onchange = ()=>{
+  switchBaseMap($('baseMapSelect').value);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════════
+window.addEventListener('resize', scaleLeafletMap);
+
+async function init(){
+  initLeaflet();
+  scaleLeafletMap();
+  const loc = await getUserLocation();
+  if(loc){ S.lat = loc.lat; S.lon = loc.lon; }
+  await loadCategories();
+  updateTimeLabels(); updateLivePauseBtn();
+  updateTimezoneIfMoved();
+  fetchImage(); fetchLegend(); startAutoRefresh();
+}
+init();
+</script>
+</body>
+</html>
