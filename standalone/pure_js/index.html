@@ -709,7 +709,7 @@ async function preloadAnimFrames(){
       const r = await fetch(radarUrlForSlot(slot));
       if (r.ok) {
         const blob = await r.blob();
-        if (blob.size >= 1024) {
+        if (blob.size >= 4000) {
           latestBlob = blob;
           latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
           anchorSlot = slot;
@@ -777,7 +777,7 @@ async function preloadAnimFrames(){
       fetch(url).then(async r => {
         if (!r.ok) return {blob: null, ts: ''};
         const blob = await r.blob();
-        if (blob.size < 1024) return {blob: null, ts: ''}; // Skip blank image
+        if (blob.size < 4000) return {blob: null, ts: ''}; // Skip blank image
         const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
         return {blob, ts};
       }).catch(e => {
@@ -831,7 +831,7 @@ async function refreshNewestFrames(){
       const r = await fetch(radarUrlForSlot(slot));
       if (r.ok) {
         const blob = await r.blob();
-        if (blob.size >= 1024) {
+        if (blob.size >= 4000) {
           latestBlob = blob;
           latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
           break; // Found a valid non-blank frame!
@@ -885,7 +885,7 @@ async function refreshNewestFrames(){
     return fetch(url).then(async r => {
       if (!r.ok) return {idx, blob: null, ts: ''};
       const blob = await r.blob();
-      if (blob.size < 1024) return {idx, blob: null, ts: ''}; // Skip blank image
+      if (blob.size < 4000) return {idx, blob: null, ts: ''}; // Skip blank image
       const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
       return {idx, blob, ts};
     }).catch(e => ({idx, blob: null, ts: ''}));
@@ -2589,7 +2589,7 @@ async function handleRadarFetch(path, init) {
         }
         const blob = new Blob([bytes], {type: "image/png"});
         
-        if (blob.size >= 1024 || attempt === 5) {
+        if (blob.size >= 4000 || attempt === 5) {
           const timestampStr = `${finalDate.getUTCFullYear()}-${String(finalDate.getUTCMonth() + 1).padStart(2,'0')}-${String(finalDate.getUTCDate()).padStart(2,'0')}T${String(finalDate.getUTCHours()).padStart(2,'0')}:${String(finalDate.getUTCMinutes()).padStart(2,'0')}:00`;
           
           const headers = new Headers();

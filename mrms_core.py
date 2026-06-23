@@ -235,7 +235,7 @@ def fetch_radar(
         cached = _cache_load(key)
         if cached is not None:
             # Check if cached image is blank
-            if len(cached) >= 1024:
+            if len(cached) >= 4000:
                 return RadarImage(
                     png_bytes=cached,
                     product=product,
@@ -281,8 +281,8 @@ def fetch_radar(
         )
         r.raise_for_status()
 
-        # Check if PNG is blank (transparent PNGs <1KB are typically empty)
-        if len(r.content) >= 1024:
+        # Check if PNG is blank (transparent PNGs <4KB are typically empty)
+        if len(r.content) >= 4000:
             # Save to cache and return
             _cache_save(key, r.content)
 

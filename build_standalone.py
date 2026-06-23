@@ -269,7 +269,7 @@ async function handleRadarFetch(path, init) {
       const response = await originalFetch(requestUrl, init);
       if (response.ok) {
         const blob = await response.blob();
-        if (blob.size >= 1024 || attempt === 5) {
+        if (blob.size >= 4000 || attempt === 5) {
           const timestampStr = `${finalDate.getUTCFullYear()}-${String(finalDate.getUTCMonth() + 1).padStart(2,'0')}-${String(finalDate.getUTCDate()).padStart(2,'0')}T${String(finalDate.getUTCHours()).padStart(2,'0')}:${String(finalDate.getUTCMinutes()).padStart(2,'0')}:00`;
           
           const headers = new Headers(response.headers);
@@ -790,7 +790,7 @@ async function handleRadarFetch(path, init) {
         }
         const blob = new Blob([bytes], {type: "image/png"});
         
-        if (blob.size >= 1024 || attempt === 5) {
+        if (blob.size >= 4000 || attempt === 5) {
           const timestampStr = `${finalDate.getUTCFullYear()}-${String(finalDate.getUTCMonth() + 1).padStart(2,'0')}-${String(finalDate.getUTCDate()).padStart(2,'0')}T${String(finalDate.getUTCHours()).padStart(2,'0')}:${String(finalDate.getUTCMinutes()).padStart(2,'0')}:00`;
           
           const headers = new Headers();
