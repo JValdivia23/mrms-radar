@@ -691,7 +691,7 @@ def build_pure_js(products_json, template_html):
 // Standalone Google Apps Script CORS Proxy Interceptor
 // ═══════════════════════════════════════════════════════════════════════════
 const categoriesCatalog = __PRODUCTS_JSON__;
-const GOOGLE_SCRIPT_PROXY = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+const GOOGLE_SCRIPT_PROXY = "https://script.google.com/macros/s/AKfycbw_v3dfB0B5U2OiAPrKcBMy-2k2FsM9tfEK7XWR3lp4MXKbbhNEVxzPo4cY0oUlXTTM/exec";
 
 function getProductMetadata(productCode) {
   for (const cat of categoriesCatalog) {
