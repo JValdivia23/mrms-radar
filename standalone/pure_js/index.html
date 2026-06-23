@@ -1057,10 +1057,20 @@ function closePanel(){ $('sidePanel').classList.remove('open'); $('backdrop').cl
 // ═══════════════════════════════════════════════════════════════════════════
 function getUserLocation(){
   return new Promise((resolve) => {
-    if(!navigator.geolocation) return resolve(null);
+    if(!navigator.geolocation) {
+      console.warn("Geolocation API not supported by browser.");
+      return resolve(null);
+    }
+    console.log("Requesting browser Geolocation...");
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({lat: pos.coords.latitude, lon: pos.coords.longitude}),
-      () => resolve(null),
+      (pos) => {
+        console.log("Geolocation success:", pos.coords.latitude, pos.coords.longitude);
+        resolve({lat: pos.coords.latitude, lon: pos.coords.longitude});
+      },
+      (err) => {
+        console.warn("Geolocation failed (code " + err.code + "): " + err.message);
+        resolve(null);
+      },
       {timeout: 5000, maximumAge: 600000}
     );
   });
