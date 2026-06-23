@@ -2688,7 +2688,20 @@ window.fetch = async function(input, init) {
       const product = params.get('product') || 'M3DL13';
       const noaaUrl = `https://mrms.nssl.noaa.gov/qvs/product_viewer/shared/fetch_svg_legend_via_config.php?web_resources_dir=/var/www/html/qvs/product_viewer/resources/&config_name=title_and_legend_config.txt&product=${product}`;
       const requestUrl = GOOGLE_SCRIPT_PROXY + '?url=' + encodeURIComponent(noaaUrl);
-      return originalFetch(requestUrl, init);
+      return originalFetch(requestUrl, init).then(async response => {
+        if (!response.ok) return response;
+        try {
+          const base64Text = await response.text();
+          const decodedSvg = window.atob(base64Text);
+          return new Response(decodedSvg, {
+            status: 200,
+            headers: { 'Content-Type': 'image/svg+xml' }
+          });
+        } catch (err) {
+          console.error("Failed to decode legend SVG:", err);
+          return response;
+        }
+      });
     }
   }
   
