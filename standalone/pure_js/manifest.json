@@ -1,0 +1,11 @@
+{
+  "name": "MRMS Radar",
+  "short_name": "MRMS",
+  "description": "NOAA MRMS Radar Viewer — real-time weather radar imagery",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "orientation": "any",
+  "icons": []
+}
