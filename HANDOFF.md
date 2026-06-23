@@ -194,6 +194,9 @@ GET https://mrms.nssl.noaa.gov/qvs/product_viewer/shared/fetch_svg_legend_via_co
 - Animation pre-fetch: `radarUrlForSlot(slot)` bypasses current mode for explicit timestamps
 - Blob URLs: `updateRadarOverlay()` creates blob URL, Leaflet's internal `<img>` manages lifecycle
 - Leaflet CDN (leaflet@1.9.4) **must load before** our inline script — `L` global used at script parse
+- **`originalFetch` context binding**: Unbound copies of browser native APIs (like `const originalFetch = window.fetch;`) throw `TypeError: Illegal invocation` when called. Always bind it to `window` (e.g., `window.fetch.bind(window)`).
+- **Dynamic Standalone Detection**: The standalone fetch hijacker probes `/api/products` using native `fetch` on startup. If a Python server is active, it disables the hijack to let the app communicate directly with `server.py` instead of the public CORS proxy.
+- **Python WASM script escaping**: Newlines in Python strings executed via Pyodide `runPythonAsync` inside JS template literals must be triple-escaped (`\\\\n`) in generator scripts to avoid JS parsing them as literal newlines, which causes Python syntax errors.
 
 ### Sketches
 - `sketches/001-windy-floating/` — the chosen design direction

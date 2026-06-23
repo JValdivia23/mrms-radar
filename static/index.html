@@ -2612,8 +2612,28 @@ async function handleRadarFetch(path, init) {
 }
 
 // Hijack fetch globally to intercept local API requests and redirect via CORS proxy
-const originalFetch = window.fetch;
-window.fetch = function(input, init) {
+let isStandalone = true;
+const originalFetch = window.fetch.bind(window);
+const detectPromise = (async () => {
+  if (window.location.protocol === 'file:') {
+    isStandalone = true;
+    return;
+  }
+  try {
+    const r = await originalFetch('/api/products');
+    if (r.ok) {
+      isStandalone = false;
+    }
+  } catch (e) {
+    isStandalone = true;
+  }
+})();
+
+window.fetch = async function(input, init) {
+  await detectPromise;
+  if (!isStandalone) {
+    return originalFetch(input, init);
+  }
   let url = '';
   if (typeof input === 'string') {
     url = input;
@@ -2920,7 +2940,7 @@ try:
     global img
     cli.main(args=args_list, standalone_mode=False)
 except Exception as e:
-    sys.stderr.write(f"Error: {e}\n")
+    sys.stderr.write(f"Error: {e}\\n")
 finally:
     sys.stdout = old_stdout
     sys.stderr = old_stderr
@@ -2938,7 +2958,7 @@ for f in files:
                 js.onPyodideFileGenerated(f, bytes(data))
             os.remove(f)
         except Exception as e:
-            js.termWrite(f"Map Redraw Error: {e}\n")
+            js.termWrite(f"Map Redraw Error: {e}\\n")
       `);
       
     } catch (e) {
