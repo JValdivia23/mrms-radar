@@ -815,20 +815,80 @@ function startAnimation(){
 async function preloadAnimFrames(){
   $('animLoading').classList.add('show');
   $('animProgress').textContent = 'Loading radar loop...';
+  
+  // 1. Fetch the absolute newest frame first to find the latest available time
+  let latestTimeStr = '';
+  let latestBlob = null;
+  try {
+    const r = await fetch(radarUrlForSlot(0));
+    if (r.ok) {
+      latestBlob = await r.blob();
+      latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+    }
+  } catch (e) {
+    console.error('Failed to fetch newest frame for loop:', e);
+  }
+  
+  // Fallback to current rounded time if fetch failed
+  if (!latestTimeStr) {
+    const d = roundSlot(new Date());
+    d.setMinutes(d.getMinutes() - 4); // default latency
+    latestTimeStr = d.toISOString().slice(0,19);
+  }
+  
+  // 2. Parse the latestTime
+  const parts = latestTimeStr.split('T');
+  const dateParts = parts[0].split('-');
+  const timeParts = parts[1].split(':');
+  const latestDate = new Date(Date.UTC(
+    parseInt(dateParts[0]),
+    parseInt(dateParts[1]) - 1,
+    parseInt(dateParts[2]),
+    parseInt(timeParts[0]),
+    parseInt(timeParts[1]),
+    0, 0
+  ));
+  
+  const mins = latestDate.getUTCMinutes();
+  const isAligned = (mins % 4 === 0);
+  
   const fetches = [];
-  for(let f = 0; f < ANIM_FRAMES; f++){
-    const slot = MAX_ANIM_SLOT - f * ANIM_STEP;
+  for (let f = 0; f < ANIM_FRAMES; f++) {
+    const i = 17 - f; // i = 0 is newest, i = 17 is oldest
+    
+    if (i === 0 && latestBlob) {
+      fetches.push(Promise.resolve({blob: latestBlob, ts: latestTimeStr}));
+      continue;
+    }
+    
+    // Calculate target date for this frame
+    let targetDate = new Date(latestDate);
+    if (isAligned) {
+      targetDate.setMinutes(targetDate.getMinutes() - i * 4);
+    } else {
+      targetDate.setMinutes(targetDate.getMinutes() - 2 - (i - 1) * 4);
+    }
+    
+    const timeParam = targetDate.toISOString().slice(0,16);
+    const p = new URLSearchParams({
+      product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
+      width: 920, height: 630,
+      time: timeParam
+    });
+    const url = '/api/radar?' + p;
+    
     fetches.push(
-      fetch(radarUrlForSlot(slot)).then(async r => {
+      fetch(url).then(async r => {
         const blob = await r.blob();
-        const ts = r.headers.get('X-MRMS-Timestamp')||'';
+        const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
         return {blob, ts};
       }).catch(e => {
-        console.error('Anim preload error frame '+f, e);
+        console.error('Anim preload error frame ' + f, e);
         return {blob: null, ts: ''};
       })
     );
   }
+  
   const results = await Promise.all(fetches);
   S.animCache = results;
   $('animLoading').classList.remove('show');
@@ -863,15 +923,67 @@ function stopAnimRefresh(){
 }
 async function refreshNewestFrames(){
   if(S.mode !== 'playing') return;
+  
+  // 1. Fetch newest frame first to find latest available time
+  let latestTimeStr = '';
+  let latestBlob = null;
+  try {
+    const r = await fetch(radarUrlForSlot(0));
+    if (r.ok) {
+      latestBlob = await r.blob();
+      latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+    }
+  } catch (e) {
+    console.error('Failed to refresh newest frame:', e);
+  }
+  
+  if (!latestTimeStr || !latestBlob) return;
+  
+  // Parse latestTime
+  const parts = latestTimeStr.split('T');
+  const dateParts = parts[0].split('-');
+  const timeParts = parts[1].split(':');
+  const latestDate = new Date(Date.UTC(
+    parseInt(dateParts[0]),
+    parseInt(dateParts[1]) - 1,
+    parseInt(dateParts[2]),
+    parseInt(timeParts[0]),
+    parseInt(timeParts[1]),
+    0, 0
+  ));
+  
+  const mins = latestDate.getUTCMinutes();
+  const isAligned = (mins % 4 === 0);
+  
   const newestIdx = [15, 16, 17];
   const fetches = newestIdx.map(idx => {
-    const slot = MAX_ANIM_SLOT - idx * ANIM_STEP;
-    return fetch(radarUrlForSlot(slot)).then(async r => {
+    const i = 17 - idx; // i = 0 for 17, i = 1 for 16, i = 2 for 15
+    if (i === 0) {
+      return Promise.resolve({idx, blob: latestBlob, ts: latestTimeStr});
+    }
+    
+    let targetDate = new Date(latestDate);
+    if (isAligned) {
+      targetDate.setMinutes(targetDate.getMinutes() - i * 4);
+    } else {
+      targetDate.setMinutes(targetDate.getMinutes() - 2 - (i - 1) * 4);
+    }
+    
+    const timeParam = targetDate.toISOString().slice(0,16);
+    const p = new URLSearchParams({
+      product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
+      width: 920, height: 630,
+      time: timeParam
+    });
+    const url = '/api/radar?' + p;
+    
+    return fetch(url).then(async r => {
       const blob = await r.blob();
-      const ts = r.headers.get('X-MRMS-Timestamp')||'';
+      const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
       return {idx, blob, ts};
     }).catch(e => ({idx, blob: null, ts: ''}));
   });
+  
   const results = await Promise.all(fetches);
   for(const {idx, blob, ts} of results){
     if(blob) S.animCache[idx] = {blob, ts};
