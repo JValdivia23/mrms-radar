@@ -227,23 +227,10 @@
   }
 
   /* ── Zoom stack (desktop) ── */
-  .zoom-stack{
-    position:fixed;right:12px;top:50%;transform:translateY(-50%);
-    z-index:100;display:flex;flex-direction:column;gap:4px;
-  }
-  .zoom-btn{
-    width:34px;height:34px;border-radius:50%;
-    border:1px solid var(--panel-border);
-    background:var(--panel-bg);backdrop-filter:blur(var(--blur));
-    -webkit-backdrop-filter:blur(var(--blur));
-    color:var(--text);font-size:18px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;
-  }
-
   /* ── Colorbar ── */
   .colorbar{
-    position:fixed;right:56px;top:50%;transform:translateY(-50%);
-    width:36px;height:220px;
+    position:fixed;right:12px;top:50%;transform:translateY(-50%);
+    width:54px;height:330px;
     background:rgba(255,255,255,.62);
     backdrop-filter:blur(var(--blur));
     -webkit-backdrop-filter:blur(var(--blur));
@@ -264,10 +251,8 @@
     .bottom-bar{min-width:auto;left:12px;right:12px;transform:none;padding:10px 14px}
     .time-display{font-size:22px}
     .side-panel{width:100vw}
-    .zoom-stack{right:6px;gap:2px}
-    .zoom-btn{width:30px;height:30px;font-size:16px}
     .level-value{font-size:20px}
-    .colorbar{right:44px;width:28px;height:180px;top:50%;transform:translateY(-50%)}
+    .colorbar{right:6px;width:42px;height:270px;top:50%;transform:translateY(-50%)}
   }
 </style>
 </head>
@@ -360,11 +345,7 @@
 <button class="corner-btn left" onclick="openPanel()">☰</button>
 <button class="corner-btn right" onclick="resetView()">⌂</button>
 
-<!-- Zoom -->
-<div class="zoom-stack">
-  <button class="zoom-btn" onclick="changeZoom(1)">+</button>
-  <button class="zoom-btn" onclick="changeZoom(-1)">−</button>
-</div>
+
 
 <!-- Colorbar -->
 <div class="colorbar" id="colorbarPanel">
@@ -831,7 +812,7 @@ function changeZoom(delta){
 }
 
 $('mapContainer').addEventListener('mousedown',e=>{
-  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.colorbar')) return;
   e.preventDefault(); isDragging=true;
   $('mapContainer').classList.add('dragging');
   dx0 = e.clientX; dy0 = e.clientY;
@@ -853,7 +834,7 @@ $('mapContainer').addEventListener('mouseleave',()=>{
 
 let pinchBase = 0, pinchAccum = 0;
 $('mapContainer').addEventListener('touchstart',e=>{
-  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.zoom-stack')) return;
+  if(e.target.closest('button,select,input,.floating,.side-panel,.backdrop,.colorbar')) return;
   e.preventDefault();
   if(e.touches.length === 2){
     isDragging = false;
@@ -889,7 +870,7 @@ $('mapContainer').addEventListener('touchend',()=>{
 $('mapContainer').addEventListener('dblclick',e=>e.preventDefault());
 
 $('mapContainer').addEventListener('wheel',e=>{
-  if(e.target.closest('.side-panel,.floating,.backdrop,.zoom-stack')) return;
+  if(e.target.closest('.side-panel,.floating,.backdrop,.colorbar')) return;
   e.preventDefault();
   changeZoom(e.deltaY < 0 ? 1 : -1);
 },{passive:false});
