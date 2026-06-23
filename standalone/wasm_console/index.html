@@ -816,24 +816,37 @@ async function preloadAnimFrames(){
   $('animLoading').classList.add('show');
   $('animProgress').textContent = 'Loading radar loop...';
   
-  // 1. Fetch the absolute newest frame first to find the latest available time
+  // 1. Fetch sequential slots starting at slot 0 to find the first non-blank image
   let latestTimeStr = '';
   let latestBlob = null;
-  try {
-    const r = await fetch(radarUrlForSlot(0));
-    if (r.ok) {
-      latestBlob = await r.blob();
-      latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+  let anchorSlot = 0;
+  
+  for (let slot = 0; slot < 6; slot++) {
+    try {
+      const r = await fetch(radarUrlForSlot(slot));
+      if (r.ok) {
+        const blob = await r.blob();
+        if (blob.size >= 1024) {
+          latestBlob = blob;
+          latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+          anchorSlot = slot;
+          break; // Found a valid non-blank frame!
+        } else {
+          console.warn(`Slot ${slot} returned a blank image (size: ${blob.size}), checking next slot.`);
+        }
+      } else {
+        console.warn(`Slot ${slot} fetch failed (status: ${r.status}), checking next slot.`);
+      }
+    } catch (e) {
+      console.error(`Failed to fetch slot ${slot} for loop anchor:`, e);
     }
-  } catch (e) {
-    console.error('Failed to fetch newest frame for loop:', e);
   }
   
-  // Fallback to current rounded time if fetch failed
-  if (!latestTimeStr) {
+  // Fallback to current rounded time minus default latency if search failed
+  if (!latestBlob) {
     const d = roundSlot(new Date());
     d.setMinutes(d.getMinutes() - 4); // default latency
-    latestTimeStr = d.toISOString().slice(0,19);
+    latestTimeStr = d.toISOString().slice(0, 19);
   }
   
   // 2. Parse the latestTime
@@ -879,7 +892,9 @@ async function preloadAnimFrames(){
     
     fetches.push(
       fetch(url).then(async r => {
+        if (!r.ok) return {blob: null, ts: ''};
         const blob = await r.blob();
+        if (blob.size < 1024) return {blob: null, ts: ''}; // Skip blank image
         const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
         return {blob, ts};
       }).catch(e => {
@@ -924,17 +939,24 @@ function stopAnimRefresh(){
 async function refreshNewestFrames(){
   if(S.mode !== 'playing') return;
   
-  // 1. Fetch newest frame first to find latest available time
+  // 1. Fetch sequential slots starting at slot 0 to find the first non-blank image
   let latestTimeStr = '';
   let latestBlob = null;
-  try {
-    const r = await fetch(radarUrlForSlot(0));
-    if (r.ok) {
-      latestBlob = await r.blob();
-      latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+  
+  for (let slot = 0; slot < 6; slot++) {
+    try {
+      const r = await fetch(radarUrlForSlot(slot));
+      if (r.ok) {
+        const blob = await r.blob();
+        if (blob.size >= 1024) {
+          latestBlob = blob;
+          latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
+          break; // Found a valid non-blank frame!
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to refresh newest frame at slot ${slot}:`, e);
     }
-  } catch (e) {
-    console.error('Failed to refresh newest frame:', e);
   }
   
   if (!latestTimeStr || !latestBlob) return;
@@ -978,7 +1000,9 @@ async function refreshNewestFrames(){
     const url = '/api/radar?' + p;
     
     return fetch(url).then(async r => {
+      if (!r.ok) return {idx, blob: null, ts: ''};
       const blob = await r.blob();
+      if (blob.size < 1024) return {idx, blob: null, ts: ''}; // Skip blank image
       const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
       return {idx, blob, ts};
     }).catch(e => ({idx, blob: null, ts: ''}));
