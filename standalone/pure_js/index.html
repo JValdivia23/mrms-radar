@@ -251,12 +251,21 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: radial-gradient(circle, 
-      rgba(0, 112, 243, 1) 0%, 
-      rgba(0, 112, 243, 0.4) 45%, 
-      rgba(0, 112, 243, 0) 70%
-    ) !important;
+    background: transparent !important;
     border: none !important;
+  }
+  /* Leaflet uses transform on the marker element to position it. Animate a
+     pseudo-element instead, so the pulse cannot overwrite that transform. */
+  .glowing-location-dot::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      rgba(0, 112, 243, 1) 0%,
+      rgba(0, 112, 243, 0.4) 45%,
+      rgba(0, 112, 243, 0) 70%
+    );
     animation: location-pulse 2.5s infinite ease-in-out;
   }
   @keyframes location-pulse {
@@ -2767,6 +2776,7 @@ async function init(){
   const loc = await getUserLocation();
   if(loc){
     S.lat = loc.lat; S.lon = loc.lon;
+    syncMap();
     updateUserMarker(loc.lat, loc.lon);
   }
   await loadCategories();
