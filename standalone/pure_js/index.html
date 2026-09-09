@@ -213,6 +213,8 @@
     font-variant-numeric:tabular-nums;
     display:flex;align-items:center;justify-content:center;gap:8px;
   }
+  .time-date{font-size:10px;line-height:1.2;color:var(--text-muted);letter-spacing:.3px}
+  .time-primary{display:flex;flex-direction:column;align-items:center;gap:2px}
   .live-dot{
     display:inline-block;width:7px;height:7px;
     background:var(--danger);border-radius:50%;
@@ -297,7 +299,7 @@
   <div class="map-error" id="mapError">
     <span style="font-size:40px">⚠</span>
     <span>Failed to load radar image</span>
-    <span style="font-size:11px;opacity:.7">Check that the server is running</span>
+    <span style="font-size:11px;opacity:.7">Try another time or check your connection</span>
   </div>
   <div class="anim-loading" id="animLoading">
     <div class="spinner"></div>
@@ -388,12 +390,16 @@
 
   <div class="time-display">
     <span class="live-dot" id="liveDot"></span>
-    <span id="timeDisplay">--:--</span>
+    <span class="time-primary">
+      <span class="time-date" id="dateDisplay"></span>
+      <span id="timeDisplay">--:--</span>
+    </span>
     <span id="localTimeDisplay" style="display:none;margin-left:4px;font-size:13px"></span>
   </div>
 
+  <div id="loopStatus" role="status" style="font-size:11px;opacity:.7;text-align:center"></div>
   <div class="time-controls">
-    <button class="time-nav" onclick="stepTime(1)" title="-2 min">◀</button>
+    <button class="time-nav" onclick="stepTime(1)" title="Previous frame">◀</button>
     <div class="time-slider-wrap">
       <input type="range" min="0" max="48" value="48" id="timeSlider">
       <div class="time-labels">
@@ -401,7 +407,7 @@
         <span id="labelEnd">NOW</span>
       </div>
     </div>
-    <button class="time-nav" onclick="stepTime(-1)" title="+2 min">▶</button>
+    <button class="time-nav" onclick="stepTime(-1)" title="Next frame">▶</button>
     <button class="time-nav now-btn" id="livePauseBtn" onclick="toggleLivePause()">⏸</button>
     <button class="time-nav now-btn" onclick="goLive()">NOW</button>
   </div>
@@ -412,7 +418,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Service Worker
 // ═══════════════════════════════════════════════════════════════════════════
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
+if(location.protocol !== 'file:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Shortcuts (must be defined before any usage)
@@ -437,10 +443,7 @@ const S = {
 };
 const SLOTS = 48;
 const ANIM_FRAMES = 18;     // frames per animation loop
-const ANIM_STEP = 2;        // slots per frame (4 min)
 const ANIM_DURATION = 5000; // ms for full loop
-const ANIM_INTERVAL = Math.floor(ANIM_DURATION / ANIM_FRAMES);
-const MAX_ANIM_SLOT = (ANIM_FRAMES - 1) * ANIM_STEP;  // 34 — maps last frame to slot 0 (now)
 
 const BASEMAPS = {
   osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -483,71 +486,92 @@ function saveSettings(){
 // ═══════════════════════════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════════════════════════
-function radarUrl(meta=false){
-  const p = new URLSearchParams({
-    product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
-    width: 920, height: 630,
-  });
-  if(S.mode !== 'live'){
-    const d = roundSlot(new Date());
-    d.setMinutes(d.getMinutes() - S.timeSlot * 2);
-    p.set('time', d.toISOString().slice(0,16));
-  }
-  if(meta) p.set('meta','true');
-  return '/api/radar?'+p;
+function resolutionMinutes(){ return product()?.min_res_minutes || 2; }
+function loopStepMinutes(){ return Math.max(4, resolutionMinutes()); }
+function loopFrameDate(anchor, index){
+  if(index === 0) return new Date(anchor);
+  const step = loopStepMinutes()*60000;
+  // Keep older frames on a stable grid so a two-minute live update reuses the loop.
+  const grid = Math.floor(anchor.getTime()/step)*step;
+  const first = grid === anchor.getTime() ? grid-step : grid;
+  return new Date(first-(index-1)*step);
 }
-function roundSlot(d){
-  const m = Math.floor(d.getUTCMinutes()/2)*2;
-  return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),d.getUTCHours(),m,0,0));
+function roundSlot(d){ return roundToMrmsWindow(d, resolutionMinutes()); }
+function viewKey(){ return [prodCode(), S.lat, S.lon, S.zoom].join('|'); }
+function radarUrlAt(date, latest=false){
+  const p = new URLSearchParams({product: prodCode(), lat: S.lat, lon: S.lon,
+    zoom: S.zoom, width: 920, height: 630});
+  if(date) p.set('time', date.toISOString());
+  if(latest) p.set('latest', 'true');
+  return '/api/radar?' + p;
 }
-
-function radarUrlForSlot(slot){
-  const p = new URLSearchParams({
-    product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
-    width: 920, height: 630,
-  });
-  const d = roundSlot(new Date());
-  d.setMinutes(d.getMinutes() - slot * 2);
-  p.set('time', d.toISOString().slice(0,16));
-  return '/api/radar?'+p;
+function radarUrl(){
+  if(S.mode === 'live') return radarUrlAt(null, true);
+  const d = S.selectedTime ? new Date(S.selectedTime) :
+    new Date(roundSlot(new Date()).getTime() - S.timeSlot * resolutionMinutes() * 60000);
+  return radarUrlAt(d);
 }
 
 function legendUrl(){
   return '/api/legend?product=' + prodCode();
 }
+let legendGeneration = 0;
+const legendCache = new Map();
 async function fetchLegend(){
+  const generation = ++legendGeneration;
+  const code = prodCode();
   try{
-    const r = await fetch(legendUrl());
-    if(!r.ok){ $('colorbarPanel').classList.add('hidden'); return; }
-    const svg = await r.text();
-    if(!svg.includes('<svg')){ $('colorbarPanel').classList.add('hidden'); return; }
-    const blob = new Blob([svg], {type:'image/svg+xml'});
-    if($('legendBar').src.startsWith('blob:')) URL.revokeObjectURL($('legendBar').src);
-    $('legendBar').src = URL.createObjectURL(blob);
+    if(!legendCache.has(code)) legendCache.set(code, fetch(legendUrl()).then(async r=>{
+      if(!r.ok) throw Error('Legend request failed');
+      const svg = await r.text();
+      if(!svg.includes('<svg')) throw Error('Invalid legend');
+      return svg;
+    }).catch(e=>{ legendCache.delete(code); throw e; }));
+    const svg = await legendCache.get(code);
+    if(generation !== legendGeneration || code !== prodCode()) return;
+    if($('legendBar').dataset.product !== code){
+      if($('legendBar').src.startsWith('blob:')) URL.revokeObjectURL($('legendBar').src);
+      $('legendBar').src = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+      $('legendBar').dataset.product = code;
+    }
     $('colorbarPanel').classList.remove('hidden');
-  }catch(e){
-    $('colorbarPanel').classList.add('hidden');
-  }
+  }catch(e){ if(generation === legendGeneration) $('colorbarPanel').classList.add('hidden'); }
 }
-
+let imageGeneration = 0;
+let imageViewKey = null;
+function showRadarError(message){
+  $('mapLoading').classList.add('hidden');
+  $('mapError').children[1].textContent = message;
+  $('mapError').classList.add('show');
+}
 async function fetchImage(){
+  if(S.mode === 'playing') stopAnimation();
+  const generation = ++imageGeneration, key = viewKey();
+  if(imageViewKey !== key){
+    S.timeline = null;
+    if(S.selectedTime) S.selectedTime = roundSlot(new Date(S.selectedTime)).toISOString();
+    $('loopStatus').textContent = '';
+  }
+  imageViewKey = key;
+  if(S.mode === 'live') startAutoRefresh();
   fetchLegend();
   const url = radarUrl();
+  updateTimeLabels();
+  $('mapLoading').querySelector('span').textContent = 'Loading radar...';
   $('mapLoading').classList.remove('hidden');
   $('mapError').classList.remove('show');
   try{
     const r = await fetch(url);
-    if(!r.ok) throw Error('HTTP '+r.status);
+    if(!r.ok) throw Error(r.status === 404 ? 'No radar frame at this time' : 'Radar request failed; try again');
     const blob = await r.blob();
+    if(generation !== imageGeneration || key !== viewKey()) return;
     updateRadarOverlay(URL.createObjectURL(blob));
     $('mapLoading').classList.add('hidden');
     syncMap();
-    const ts = r.headers.get('X-MRMS-Timestamp')||'';
+    const ts = r.headers.get('X-MRMS-Timestamp') || '';
     updateTimeDisplay(ts);
   }catch(e){
-    console.error(e);
-    $('mapLoading').querySelector('span').textContent='Retrying...';
-    setTimeout(fetchImage,3000);
+    if(generation === imageGeneration && key === viewKey()) showRadarError(e.message);
   }
 }
 
@@ -555,6 +579,7 @@ function updateTimeDisplay(ts){
   const parts = ts.split('T');
   if(parts.length<2) return;
   const t = parts[1].slice(0,5);
+  $('dateDisplay').textContent = parts[0];
   $('timeDisplay').textContent = t + ' UTC';
   if(S.tz){
     const [h,m] = t.split(':').map(Number);
@@ -672,16 +697,33 @@ function updateProductBadge(){
 // Time
 // ═══════════════════════════════════════════════════════════════════════════
 function updateTimeLabels(){
+  if(S.timeline?.length && S.selectedTime){
+    $('timeSlider').max = S.timeline.length - 1;
+    $('timeSlider').value = Math.max(0, S.timeline.indexOf(S.selectedTime));
+    $('labelStart').textContent = S.timeline[0].slice(11,16);
+    $('labelEnd').textContent = S.timeline.at(-1).slice(11,16);
+    return;
+  }
   const now = roundSlot(new Date());
-  const start = new Date(now.getTime() - SLOTS*2*60000);
+  const start = new Date(now.getTime() - SLOTS*resolutionMinutes()*60000);
   const fmt = d=>`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
   $('labelStart').textContent = fmt(start);
   $('labelEnd').textContent = S.mode === 'live' ? 'NOW' : fmt(new Date(now.getTime()));
+  $('timeSlider').max = SLOTS;
   $('timeSlider').value = SLOTS - S.timeSlot;
 }
 
 function stepTime(n){
   stopAnimation();
+  if(S.timeline?.length && S.selectedTime){
+    const index = Math.max(0, S.timeline.indexOf(S.selectedTime));
+    S.selectedTime = S.timeline[Math.max(0, Math.min(S.timeline.length-1, index-n))];
+    S.mode = 'paused';
+    updateTimeLabels();
+    fetchImage();
+    return;
+  }
+  S.selectedTime = null;
   S.timeSlot = Math.max(0, Math.min(SLOTS, S.timeSlot + n));
   S.mode = S.timeSlot === 0 ? 'live' : 'paused';
   if(S.mode === 'live') startAutoRefresh();
@@ -692,6 +734,9 @@ function stepTime(n){
 }
 function goLive(){
   stopAnimation();
+  S.selectedTime = null;
+  S.timeline = null;
+  $('loopStatus').textContent = '';
   S.timeSlot = 0; S.mode = 'live';
   $('liveDot').style.display = 'inline-block';
   updateLivePauseBtn();
@@ -709,228 +754,142 @@ function toggleLivePause(){
 function updateLivePauseBtn(){
   $('livePauseBtn').textContent = S.mode === 'playing' ? '⏸' : '⏯';
 }
+let loopGeneration = 0;
+let loopRefreshing = false;
 function startAnimation(){
   stopAutoRefresh();
   stopAnimation();
+  ++imageGeneration;
   S.mode = 'playing';
   S.animFrame = 0;
   S.animCache = [];
+  S.timeline = null;
+  imageViewKey = viewKey();
+  $('loopStatus').textContent = '';
   $('liveDot').style.display = 'none';
+  $('mapError').classList.remove('show');
   updateLivePauseBtn();
-  preloadAnimFrames().then(()=>{
-    if(S.mode !== 'playing') return;
-    stepAnimFrame();
-    startAnimRefresh();
-  });
+  fetchLegend();
+  loadLoop(false);
 }
-async function preloadAnimFrames(){
-  $('animLoading').classList.add('show');
-  $('animProgress').textContent = 'Loading radar loop...';
-  
-  // 1. Fetch sequential slots starting at slot 0 to find the first non-blank image
-  let latestTimeStr = '';
-  let latestBlob = null;
-  let anchorSlot = 0;
-  
-  for (let slot = 0; slot < 6; slot++) {
-    try {
-      const r = await fetch(radarUrlForSlot(slot));
-      if (r.ok) {
-        const blob = await r.blob();
-        if (blob.size >= 4000) {
-          latestBlob = blob;
-          latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
-          anchorSlot = slot;
-          break; // Found a valid non-blank frame!
-        } else {
-          console.warn(`Slot ${slot} returned a blank image (size: ${blob.size}), checking next slot.`);
-        }
-      } else {
-        console.warn(`Slot ${slot} fetch failed (status: ${r.status}), checking next slot.`);
+async function loadLoop(refresh){
+  const generation = loopGeneration, key = viewKey();
+  const active = ()=>generation === loopGeneration && key === viewKey() && S.mode === 'playing';
+  let started = refresh && !!S.animTimer;
+  let completed = 0, missing = 0, failed = 0;
+  const frames = [];
+  if(!refresh) $('animLoading').classList.add('show');
+  $('animProgress').textContent = 'Finding latest radar frame...';
+  try{
+    const r = await fetch(radarUrlAt(null, true));
+    if(!active()) return;
+    if(!r.ok) throw Error(r.status === 404 ? 'No recent radar frames available' : 'Radar request failed; try again');
+    const ts = r.headers.get('X-MRMS-Timestamp');
+    if(!ts) throw Error('Missing radar timestamp');
+    const anchor = new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+    if(!Number.isFinite(anchor.getTime())) throw Error('Missing radar timestamp');
+    const blob = await r.blob();
+    if(!active()) return;
+    frames.push({blob, ts: anchor.toISOString()});
+    const publish = ()=>{
+      if(!active()) return;
+      if(refresh && completed < ANIM_FRAMES-1) return;
+      if(!refresh) $('loopStatus').textContent = `Loading ${frames.length}/${ANIM_FRAMES} frames…`;
+      const selected = S.animCache[S.animFrame]?.ts;
+      S.animCache = [...frames].sort((a,b)=>a.ts.localeCompare(b.ts));
+      S.timeline = S.animCache.map(frame=>frame.ts);
+      S.animFrame = Math.max(0, S.animCache.findIndex(f=>f.ts === selected));
+      $('animProgress').textContent = `${frames.length}/${ANIM_FRAMES} frames · ${missing} unavailable · ${failed} failed`;
+      if(!started && (frames.length >= 3 || completed === ANIM_FRAMES - 1)){
+        started = true;
+        $('animLoading').classList.remove('show');
+        stepAnimFrame();
       }
-    } catch (e) {
-      console.error(`Failed to fetch slot ${slot} for loop anchor:`, e);
+    };
+    // Newest first, at most three requests in flight. Each successful probe IS the frame.
+    let next = 1;
+    const worker = async()=>{
+      while(active() && next < ANIM_FRAMES){
+        const index = next++;
+        const date = loopFrameDate(anchor, index);
+        try{
+          const result = await fetch(radarUrlAt(date));
+          if(!active()) return;
+          if(result.ok){
+            const frameBlob = await result.blob();
+            const actual = result.headers.get('X-MRMS-Timestamp');
+            // A server fallback must never masquerade as an exact historical frame.
+            if(actual && new Date(actual.endsWith('Z') ? actual : actual+'Z').getTime() === date.getTime())
+              frames.push({blob: frameBlob, ts: date.toISOString()});
+            else missing++;
+          }else if(result.status === 404) missing++;
+          else failed++;
+        }catch(e){ failed++; }
+        completed++;
+        publish();
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    if(!active()) return;
+    publish();
+    $('animLoading').classList.remove('show');
+    $('loopStatus').textContent = `${frames.length} frames · ${loopStepMinutes()} min step` +
+      (missing ? ` · ${missing} unavailable` : '') + (failed ? ` · ${failed} failed` : '');
+    if(!refresh) startAnimRefresh();
+  }catch(e){
+    if(active()){
+      if(!refresh){ stopAnimation(); showRadarError(e.message); }
+      else $('loopStatus').textContent = 'Loop refresh failed; showing cached frames';
     }
   }
-  
-  // Fallback to current rounded time minus default latency if search failed
-  if (!latestBlob) {
-    const d = roundSlot(new Date());
-    d.setMinutes(d.getMinutes() - 4); // default latency
-    latestTimeStr = d.toISOString().slice(0, 19);
-  }
-  
-  // 2. Parse the latestTime
-  const parts = latestTimeStr.split('T');
-  const dateParts = parts[0].split('-');
-  const timeParts = parts[1].split(':');
-  const latestDate = new Date(Date.UTC(
-    parseInt(dateParts[0]),
-    parseInt(dateParts[1]) - 1,
-    parseInt(dateParts[2]),
-    parseInt(timeParts[0]),
-    parseInt(timeParts[1]),
-    0, 0
-  ));
-  
-  const mins = latestDate.getUTCMinutes();
-  const isAligned = (mins % 4 === 0);
-  
-  const fetches = [];
-  for (let f = 0; f < ANIM_FRAMES; f++) {
-    const i = 17 - f; // i = 0 is newest, i = 17 is oldest
-    
-    if (i === 0 && latestBlob) {
-      fetches.push(Promise.resolve({blob: latestBlob, ts: latestTimeStr}));
-      continue;
-    }
-    
-    // Calculate target date for this frame
-    let targetDate = new Date(latestDate);
-    if (isAligned) {
-      targetDate.setMinutes(targetDate.getMinutes() - i * 4);
-    } else {
-      targetDate.setMinutes(targetDate.getMinutes() - 2 - (i - 1) * 4);
-    }
-    
-    const timeParam = targetDate.toISOString().slice(0,16);
-    const p = new URLSearchParams({
-      product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
-      width: 920, height: 630,
-      time: timeParam
-    });
-    const url = '/api/radar?' + p;
-    
-    fetches.push(
-      fetch(url).then(async r => {
-        if (!r.ok) return {blob: null, ts: ''};
-        const blob = await r.blob();
-        if (blob.size < 4000) return {blob: null, ts: ''}; // Skip blank image
-        const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
-        return {blob, ts};
-      }).catch(e => {
-        console.error('Anim preload error frame ' + f, e);
-        return {blob: null, ts: ''};
-      })
-    );
-  }
-  
-  const results = await Promise.all(fetches);
-  S.animCache = results;
-  $('animLoading').classList.remove('show');
 }
 function stopAnimation(){
+  ++loopGeneration;
+  ++imageGeneration;
   if(S.animTimer){ clearTimeout(S.animTimer); S.animTimer = null; }
   stopAnimRefresh();
   if(S.mode === 'playing') S.mode = 'paused';
+  $('animLoading').classList.remove('show');
   updateLivePauseBtn();
   cleanupAnimBlobs();
 }
 function stepAnimFrame(){
-  if(S.mode !== 'playing') return;
-  S.timeSlot = MAX_ANIM_SLOT - S.animFrame * ANIM_STEP;
-  updateTimeLabels();
+  if(S.mode !== 'playing' || !S.animCache.length) return;
+  S.animFrame %= S.animCache.length;
   const frame = S.animCache[S.animFrame];
-  if(frame && frame.blob){
-    updateRadarOverlay(URL.createObjectURL(frame.blob));
-    $('mapLoading').classList.add('hidden');
-    updateTimeDisplay(frame.ts);
-    syncMap();
-  }
-  S.animFrame = (S.animFrame + 1) % ANIM_FRAMES;
-  if(S.mode === 'playing') S.animTimer = setTimeout(stepAnimFrame, ANIM_INTERVAL);
+  S.selectedTime = frame.ts;
+  S.timeSlot = Math.max(0, Math.round((roundSlot(new Date()).getTime() - Date.parse(frame.ts)) / (resolutionMinutes()*60000)));
+  $('timeSlider').max = S.animCache.length - 1;
+  $('timeSlider').value = S.animFrame;
+  $('labelStart').textContent = S.animCache[0].ts.slice(11,16);
+  $('labelEnd').textContent = S.animCache.at(-1).ts.slice(11,16);
+  updateRadarOverlay(URL.createObjectURL(frame.blob));
+  $('mapLoading').classList.add('hidden');
+  updateTimeDisplay(frame.ts);
+  S.animFrame = (S.animFrame + 1) % S.animCache.length;
+  S.animTimer = setTimeout(stepAnimFrame, Math.floor(ANIM_DURATION / S.animCache.length));
 }
 function startAnimRefresh(){
   stopAnimRefresh();
-  S.animRefreshTimer = setInterval(refreshNewestFrames, 120000);
+  S.animRefreshTimer = setInterval(refreshNewestFrames, resolutionMinutes()*60000);
 }
 function stopAnimRefresh(){
   if(S.animRefreshTimer){ clearInterval(S.animRefreshTimer); S.animRefreshTimer = null; }
 }
 async function refreshNewestFrames(){
-  if(S.mode !== 'playing') return;
-  
-  // 1. Fetch sequential slots starting at slot 0 to find the first non-blank image
-  let latestTimeStr = '';
-  let latestBlob = null;
-  
-  for (let slot = 0; slot < 6; slot++) {
-    try {
-      const r = await fetch(radarUrlForSlot(slot));
-      if (r.ok) {
-        const blob = await r.blob();
-        if (blob.size >= 4000) {
-          latestBlob = blob;
-          latestTimeStr = r.headers.get('X-MRMS-Timestamp') || '';
-          break; // Found a valid non-blank frame!
-        }
-      }
-    } catch (e) {
-      console.error(`Failed to refresh newest frame at slot ${slot}:`, e);
-    }
-  }
-  
-  if (!latestTimeStr || !latestBlob) return;
-  
-  // Parse latestTime
-  const parts = latestTimeStr.split('T');
-  const dateParts = parts[0].split('-');
-  const timeParts = parts[1].split(':');
-  const latestDate = new Date(Date.UTC(
-    parseInt(dateParts[0]),
-    parseInt(dateParts[1]) - 1,
-    parseInt(dateParts[2]),
-    parseInt(timeParts[0]),
-    parseInt(timeParts[1]),
-    0, 0
-  ));
-  
-  const mins = latestDate.getUTCMinutes();
-  const isAligned = (mins % 4 === 0);
-  
-  const newestIdx = [15, 16, 17];
-  const fetches = newestIdx.map(idx => {
-    const i = 17 - idx; // i = 0 for 17, i = 1 for 16, i = 2 for 15
-    if (i === 0) {
-      return Promise.resolve({idx, blob: latestBlob, ts: latestTimeStr});
-    }
-    
-    let targetDate = new Date(latestDate);
-    if (isAligned) {
-      targetDate.setMinutes(targetDate.getMinutes() - i * 4);
-    } else {
-      targetDate.setMinutes(targetDate.getMinutes() - 2 - (i - 1) * 4);
-    }
-    
-    const timeParam = targetDate.toISOString().slice(0,16);
-    const p = new URLSearchParams({
-      product: prodCode(), lat: S.lat, lon: S.lon, zoom: S.zoom,
-      width: 920, height: 630,
-      time: timeParam
-    });
-    const url = '/api/radar?' + p;
-    
-    return fetch(url).then(async r => {
-      if (!r.ok) return {idx, blob: null, ts: ''};
-      const blob = await r.blob();
-      if (blob.size < 4000) return {idx, blob: null, ts: ''}; // Skip blank image
-      const ts = r.headers.get('X-MRMS-Timestamp') || timeParam + ':00';
-      return {idx, blob, ts};
-    }).catch(e => ({idx, blob: null, ts: ''}));
-  });
-  
-  const results = await Promise.all(fetches);
-  for(const {idx, blob, ts} of results){
-    if(blob) S.animCache[idx] = {blob, ts};
-  }
+  if(S.mode !== 'playing' || loopRefreshing) return;
+  loopRefreshing = true;
+  try{ await loadLoop(true); }finally{ loopRefreshing = false; }
 }
-function cleanupAnimBlobs(){
-  S.animCache = [];
-}
+function cleanupAnimBlobs(){ S.animCache = []; }
 $('timeSlider').oninput = ()=>{
+  const selected = S.timeline?.[Number($('timeSlider').value)];
+  const frame = selected ? {ts:selected} : null;
+  const slot = SLOTS - Number($('timeSlider').value);
   stopAnimation();
-  S.timeSlot = SLOTS - parseInt($('timeSlider').value);
-  S.mode = S.timeSlot === 0 ? 'live' : 'paused';
+  S.selectedTime = frame ? frame.ts : null;
+  S.timeSlot = frame ? Math.max(0, Math.round((roundSlot(new Date()) - new Date(frame.ts))/(resolutionMinutes()*60000))) : slot;
+  S.mode = frame || S.timeSlot !== 0 ? 'paused' : 'live';
   $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
   updateLivePauseBtn();
   updateTimeLabels();
@@ -952,7 +911,7 @@ $('zoomSlider').onchange = ()=>{
 // ═══════════════════════════════════════════════════════════════════════════
 function startAutoRefresh(){
   stopAutoRefresh();
-  S.refreshTimer = setInterval(()=>{ if(S.mode === 'live') fetchImage(); }, 120000);
+  S.refreshTimer = setInterval(()=>{ if(S.mode === 'live') fetchImage(); }, resolutionMinutes()*60000);
 }
 function stopAutoRefresh(){
   if(S.refreshTimer){ clearInterval(S.refreshTimer); S.refreshTimer = null; }
@@ -1191,8 +1150,12 @@ function getRadarBounds(){
     leafletMap.unproject(se, S.zoom)
   );
 }
+let displayedRadarUrl = null;
 function updateRadarOverlay(imageUrl){
-  if(!leafletMap) return;
+  if(!leafletMap){ URL.revokeObjectURL(imageUrl); return; }
+  const previous = displayedRadarUrl;
+  displayedRadarUrl = imageUrl;
+  if(previous) URL.revokeObjectURL(previous);
   const bounds = getRadarBounds();
   if(radarOverlay){
     radarOverlay.setUrl(imageUrl);
@@ -2582,97 +2545,114 @@ function roundToMrmsWindow(date, resMins) {
   ));
 }
 
-async function handleRadarFetch(path, init) {
+// Cache exact render results, including in-flight work, across still images and loops.
+const radarFrames = new Map();
+const radarPending = new Map();
+let radarCacheBytes = 0;
+let activeRenders = 0;
+const renderQueue = [];
+async function withRenderSlot(work){
+  if(activeRenders >= 3) await new Promise(resolve=>renderQueue.push(resolve));
+  else activeRenders++;
+  try{ return await work(); }
+  finally{
+    const next = renderQueue.shift();
+    if(next) next(); else activeRenders--;
+  }
+}
+function cacheRender(key, blob){
+  const old = radarFrames.get(key);
+  if(old) radarCacheBytes -= old.blob?.size || 0;
+  radarFrames.delete(key);
+  radarFrames.set(key, {blob, expires: blob ? Infinity : Date.now()+20000});
+  radarCacheBytes += blob?.size || 0;
+  while(radarFrames.size > 80 || radarCacheBytes > 32*1024*1024){
+    const oldest = radarFrames.keys().next().value;
+    radarCacheBytes -= radarFrames.get(oldest).blob?.size || 0;
+    radarFrames.delete(oldest);
+  }
+}
+async function validRadarBlob(bytes){
+  if(bytes.length === 0) return null;
+  const signature = [137,80,78,71,13,10,26,10];
+  if(!signature.every((value,index)=>bytes[index] === value))
+    throw Error('Proxy returned a non-PNG response');
+  if(bytes.length < 4000) return null;
+  const blob = new Blob([bytes], {type:'image/png'});
+  // Decode before claiming availability; MIME type and byte count alone are insufficient.
+  if(typeof createImageBitmap === 'function'){
+    const bitmap = await createImageBitmap(blob);
+    const valid = bitmap.width === 920 && bitmap.height === 630;
+    bitmap.close();
+    if(!valid) throw Error('Unexpected radar dimensions');
+  }else{
+    const url = URL.createObjectURL(blob);
+    try{
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      if(img.naturalWidth !== 920 || img.naturalHeight !== 630) throw Error('Unexpected radar dimensions');
+    }finally{ URL.revokeObjectURL(url); }
+  }
+  return blob;
+}
+async function exactRender(noaaUrl){
+  const cached = radarFrames.get(noaaUrl);
+  if(cached && cached.expires > Date.now()){
+    radarFrames.delete(noaaUrl);
+    radarFrames.set(noaaUrl, cached);
+    return cached.blob;
+  }
+  if(radarPending.has(noaaUrl)) return radarPending.get(noaaUrl);
+  const pending = withRenderSlot(async()=>{
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 20000);
+    try{
+      const response = await originalFetch(GOOGLE_SCRIPT_PROXY + '?url=' + encodeURIComponent(noaaUrl), {signal:controller.signal});
+      if(!response.ok) throw Error('Proxy HTTP ' + response.status);
+      const base64 = await response.text();
+      const binary = atob(base64.trim());
+      const bytes = Uint8Array.from(binary, c=>c.charCodeAt(0));
+      const blob = await validRadarBlob(bytes);
+      cacheRender(noaaUrl, blob);
+      return blob;
+    }finally{ clearTimeout(timer); }
+  });
+  radarPending.set(noaaUrl, pending);
+  try{ return await pending; }finally{ radarPending.delete(noaaUrl); }
+}
+async function handleRadarFetch(path, init){
   const params = new URLSearchParams(path.split('?')[1]);
   const productCode = params.get('product') || 'M3DL13';
-  const meta = getProductMetadata(productCode);
-  const resMins = meta ? meta.min_res_minutes : 2;
-  
-  let targetDate;
+  const resMins = getProductMetadata(productCode)?.min_res_minutes || 2;
   const timeVal = params.get('time');
-  if (timeVal) {
-    targetDate = roundToMrmsWindow(new Date(timeVal + 'Z'), resMins);
-  } else {
-    let now = new Date();
-    let rounded = roundToMrmsWindow(now, resMins);
-    const latencyMins = Math.max(4, resMins * 2);
-    rounded.setMinutes(rounded.getMinutes() - latencyMins);
-    targetDate = rounded;
-  }
-  
-  const clon = params.get('lon') || S.lon;
-  const clat = params.get('lat') || S.lat;
-  const zoom = params.get('zoom') || S.zoom;
-  const width = params.get('width') || 920;
-  const height = params.get('height') || 630;
-  
-  let lastResponse = null;
-  let finalDate = new Date(targetDate);
-  
-  // Try up to 6 times, stepping back by 2 minutes and retrying
-  for (let attempt = 0; attempt < 6; attempt++) {
+  const latest = !timeVal;
+  let date = timeVal ? new Date(/(?:Z|[+-]\d\d:\d\d)$/.test(timeVal) ? timeVal : timeVal+'Z') : new Date();
+  if(!Number.isFinite(date.getTime())) return new Response('Invalid timestamp', {status:400});
+  if(timeVal && roundToMrmsWindow(date,resMins).getTime() !== date.getTime())
+    return new Response('Timestamp is not aligned to product resolution', {status:400});
+  if(latest) date = new Date(roundToMrmsWindow(date,resMins).getTime() - Math.max(4,resMins*2)*60000);
+  for(let attempt=0; attempt < (latest ? 6 : 1); attempt++){
     const p = new URLSearchParams({
-      mode: "run",
-      cpp_exec_dir: "/home/metop/web/specific/opv/",
-      web_resources_dir: "/var/www/html/qvs/product_viewer/resources/",
-      prod_root: productCode,
-      qperate_pal_option: 0,
-      qpe_pal_option: 0,
-      clon: clon,
-      clat: clat,
-      zoom: zoom,
-      width: width,
-      height: height,
-      year: finalDate.getUTCFullYear(),
-      month: finalDate.getUTCMonth() + 1,
-      day: finalDate.getUTCDate(),
-      hour: finalDate.getUTCHours(),
-      minute: finalDate.getUTCMinutes()
+      mode:'run', cpp_exec_dir:'/home/metop/web/specific/opv/',
+      web_resources_dir:'/var/www/html/qvs/product_viewer/resources/',
+      prod_root:productCode, qperate_pal_option:0, qpe_pal_option:0,
+      clon:params.get('lon') || S.lon, clat:params.get('lat') || S.lat,
+      zoom:params.get('zoom') || S.zoom, width:920, height:630,
+      year:date.getUTCFullYear(), month:date.getUTCMonth()+1, day:date.getUTCDate(),
+      hour:date.getUTCHours(), minute:date.getUTCMinutes()
     });
-    
-    const noaaUrl = 'https://mrms.nssl.noaa.gov/qvs/product_viewer/local/render_multi_domain_product_layer.php?' + p;
-    
-    // Redirect through Google Apps Script Proxy
-    const requestUrl = GOOGLE_SCRIPT_PROXY + '?url=' + encodeURIComponent(noaaUrl);
-    
-    try {
-      const response = await originalFetch(requestUrl, init);
-      if (response.ok) {
-        const base64Text = await response.text();
-        
-        // Convert Base64 back to Blob so it integrates cleanly with native fetch API
-        const binaryString = window.atob(base64Text);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], {type: "image/png"});
-        
-        if (blob.size >= 4000 || attempt === 5) {
-          const timestampStr = `${finalDate.getUTCFullYear()}-${String(finalDate.getUTCMonth() + 1).padStart(2,'0')}-${String(finalDate.getUTCDate()).padStart(2,'0')}T${String(finalDate.getUTCHours()).padStart(2,'0')}:${String(finalDate.getUTCMinutes()).padStart(2,'0')}:00`;
-          
-          const headers = new Headers();
-          headers.set('Content-Type', 'image/png');
-          headers.set('X-MRMS-Timestamp', timestampStr);
-          headers.set('Access-Control-Expose-Headers', 'X-MRMS-Timestamp');
-          
-          return new Response(blob, {
-            status: 200,
-            headers: headers
-          });
-        }
-      }
-      lastResponse = response;
-    } catch (err) {
-      console.warn(`Attempt ${attempt} failed:`, err);
+    const url = 'https://mrms.nssl.noaa.gov/qvs/product_viewer/local/render_multi_domain_product_layer.php?' + p;
+    try{
+      const blob = await exactRender(url);
+      if(blob) return new Response(blob, {headers:{'Content-Type':'image/png', 'X-MRMS-Timestamp':date.toISOString()}});
+    }catch(e){
+      // Transport/proxy failures are unknown availability, never negative-cached.
+      return new Response('Radar proxy request failed', {status:502});
     }
-    
-    finalDate.setMinutes(finalDate.getMinutes() - 2);
+    date = new Date(date.getTime() - resMins*60000);
   }
-  
-  if (lastResponse) return lastResponse;
-  throw new Error("Failed to fetch radar image after 6 attempts");
+  return new Response('No frame available', {status:404});
 }
 
 // Hijack fetch globally to intercept local API requests and redirect via Google Apps Script CORS proxy
@@ -2782,7 +2762,7 @@ async function init(){
   await loadCategories();
   updateTimeLabels(); updateLivePauseBtn();
   updateTimezoneIfMoved();
-  fetchImage(); fetchLegend(); startAutoRefresh();
+  fetchImage(); startAutoRefresh();
 }
 init();
 </script>
