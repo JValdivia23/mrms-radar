@@ -213,8 +213,9 @@
     font-variant-numeric:tabular-nums;
     display:flex;align-items:center;justify-content:center;gap:8px;
   }
-  .time-date{font-size:10px;line-height:1.2;color:var(--text-muted);letter-spacing:.3px}
-  .time-primary{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .time-secondary{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+  .time-local{font-size:13px;line-height:1.1}
+  .time-date{font-size:10px;line-height:1.1;color:var(--text-muted);letter-spacing:.3px}
   .live-dot{
     display:inline-block;width:7px;height:7px;
     background:var(--danger);border-radius:50%;
@@ -390,11 +391,11 @@
 
   <div class="time-display">
     <span class="live-dot" id="liveDot"></span>
-    <span class="time-primary">
+    <span id="timeDisplay">--:--</span>
+    <span class="time-secondary">
+      <span class="time-local" id="localTimeDisplay" style="display:none"></span>
       <span class="time-date" id="dateDisplay"></span>
-      <span id="timeDisplay">--:--</span>
     </span>
-    <span id="localTimeDisplay" style="display:none;margin-left:4px;font-size:13px"></span>
   </div>
 
   <div id="loopStatus" role="status" style="font-size:11px;opacity:.7;text-align:center"></div>
