@@ -1,5 +1,18 @@
 # Google Apps Script CORS Proxy Setup (Lightweight Mode)
 
+## Background maps
+
+The default **Natural Earth (Dark)** map is bundled with the app. It needs no
+API key or tile server and works when opened via `file://`. Keep
+`natural-earth.js` and `natural-earth-data.js` beside `index.html` when copying
+the standalone app. Mapnik and Satellite remain available in the map selector.
+
+The map includes country/state borders and city labels, with fewer details at
+city zoom than a street map. Data is Natural Earth v5.1.2, public domain:
+https://www.naturalearthdata.com/about/terms-of-use/ . Regenerate the data with
+`python tools/build_natural_earth.py` from the project root. The standalone
+builder copies the bundled map assets automatically.
+
 To run the Lightweight Pure JS standalone page, you need to configure your own Google Apps Script to act as a private CORS proxy. This requires no servers, is completely free, and will bypass CORS restrictions safely.
 
 ---
@@ -79,7 +92,7 @@ The standalone page keeps using the configured Apps Script proxy; no Python serv
 Run the standalone regression checks from the project root with Node.js (no additional packages or network required):
 
 ```bash
-node --test standalone/pure_js/tests/retrieval.test.cjs
+node --test standalone/pure_js/tests/*.test.cjs
 ```
 
 The tests mock proxy responses and image decoding, including 90 scheduled refreshes over three simulated hours across midnight. Every refresh checks all 18 timestamps and their corresponding image data, guarding against a frozen history with only the newest frame updating. Real image decoding and the proxy connection should also be checked by opening `index.html` in a browser and playing a loop.

@@ -50,6 +50,16 @@
     pointer-events:none;
   }
 
+  .leaflet-container.natural-earth-map{background:#0b1420}
+  .natural-earth-label{
+    color:#c7ced6;font:11px/16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    white-space:nowrap;text-shadow:0 1px 2px #000,1px 0 2px #000,-1px 0 2px #000;
+  }
+  .map-credit{
+    position:fixed;bottom:4px;left:6px;z-index:100;
+    font-size:10px;color:#bbc3cc;background:rgba(10,14,20,.8);padding:2px 5px;
+  }
+  .map-credit a{color:inherit}
   .map-loading,.map-error{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     display:flex;flex-direction:column;align-items:center;gap:12px;
@@ -368,7 +378,7 @@
     <select id="baseMapSelect">
       <option value="osm">Mapnik</option>
       <option value="satellite">Satellite</option>
-      <option value="dark" selected>Dark</option>
+      <option value="dark" selected>Natural Earth (Dark)</option>
     </select>
   </div>
 
@@ -425,6 +435,9 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div class="map-credit" id="mapCredit"></div>
+<script src="natural-earth-data.js"></script>
+<script src="natural-earth.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
 // Service Worker
@@ -465,11 +478,16 @@ const BASEMAPS = {
     maxZoom: 19,
     attribution: 'Esri, Maxar, Earthstar Geographics',
   }),
-  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, &copy; <a href="https://carto.com/">CARTO</a>',
-  }),
+  dark: null, // Created lazily once Leaflet and local Natural Earth data are ready.
 };
+if (!Object.hasOwn(BASEMAPS, S.baseMap)) S.baseMap = 'dark';
+function prepareBaseMap(key) {
+  if (key === 'dark' && !BASEMAPS.dark) BASEMAPS.dark = window.MRMSNaturalEarth.createLayer(L);
+  $('mapCredit').innerHTML = key === 'dark'
+    ? 'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>'
+    : BASEMAPS[key].options.attribution;
+  return BASEMAPS[key];
+}
 let leafletMap;
 
 let categories = [];
@@ -1134,16 +1152,16 @@ function initLeaflet(){
     boxZoom: false,
     keyboard: false,
   });
-  BASEMAPS[S.baseMap].addTo(leafletMap);
+  prepareBaseMap(S.baseMap).addTo(leafletMap);
 }
 function syncMap(){
   if(!leafletMap) return;
   leafletMap.setView([S.lat, S.lon], S.zoom, {animate: false});
 }
 function switchBaseMap(key){
-  if(!leafletMap || key === S.baseMap) return;
+  if(!leafletMap || !Object.hasOwn(BASEMAPS, key) || key === S.baseMap) return;
   leafletMap.removeLayer(BASEMAPS[S.baseMap]);
-  BASEMAPS[key].addTo(leafletMap);
+  prepareBaseMap(key).addTo(leafletMap);
   S.baseMap = key;
   saveSettings();
 }

@@ -9,6 +9,7 @@ CLI_PATH = os.path.join(SCRIPT_DIR, "mrms_cli.py")
 PRODUCTS_PATH = os.path.join(SCRIPT_DIR, "mrms_products.json")
 TEMPLATE_PATH = os.path.join(SCRIPT_DIR, "static", "index.template.html")
 MANIFEST_PATH = os.path.join(SCRIPT_DIR, "static", "manifest.json")
+BASEMAP_ASSETS = ("natural-earth.js", "natural-earth-data.js")
 
 STANDALONE_DIR = os.path.join(SCRIPT_DIR, "standalone")
 WASM_DIR = os.path.join(STANDALONE_DIR, "wasm_console")
@@ -23,7 +24,16 @@ def load_source_files():
         products_json = f.read()
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         template_html = f.read()
+    # Standalone pages load adjacent scripts, including when opened via file://.
+    for asset in BASEMAP_ASSETS:
+        template_html = template_html.replace(f'src="/static/{asset}"', f'src="{asset}"')
     return core_code, cli_code, products_json, template_html
+
+def copy_basemap_assets():
+    for directory in (WASM_DIR, PURE_JS_DIR):
+        os.makedirs(directory, exist_ok=True)
+        for asset in BASEMAP_ASSETS:
+            shutil.copy(os.path.join(SCRIPT_DIR, "static", asset), directory)
 
 def build_wasm_console(core_code, cli_code, products_json, template_html):
     # CSS Injection
@@ -933,6 +943,7 @@ def main():
     build_pure_js(products_json, template_html)
     
     print("Copying manifest files...")
+    copy_basemap_assets()
     shutil.copy(MANIFEST_PATH, os.path.join(WASM_DIR, "manifest.json"))
     shutil.copy(MANIFEST_PATH, os.path.join(PURE_JS_DIR, "manifest.json"))
     

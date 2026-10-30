@@ -1,10 +1,12 @@
 // MRMS Radar — Service Worker
 // Caches the app shell and recent radar images for offline/PWA use.
 
-const CACHE = 'mrms-v1';
+const CACHE = 'mrms-v2-natural-earth';
 const SHELL = [
   '/',
   '/static/manifest.json',
+  '/static/natural-earth.js',
+  '/static/natural-earth-data.js',
 ];
 
 self.addEventListener('install', e => {
