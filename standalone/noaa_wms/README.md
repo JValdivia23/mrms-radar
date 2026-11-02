@@ -42,10 +42,12 @@ transport is used.
 - **NOW** returns to the latest advertised scan. Live view and playing loops
   check for new scans every 30 seconds while the page is visible. Published
   cadence and retained history are controlled by NOAA.
-- **Pan/zoom** select the image viewport. The basemap picker, radar-opacity
-  slider, and location marker follow the original interface. The home button
-  requests browser location permission when clicked; startup uses the remembered
-  view or northern Colorado without waiting for geolocation.
+- **Pan/zoom** select the image viewport. The basemap picker and radar-opacity
+  slider follow the original interface. Startup requests browser location access
+  in parallel with radar loading. If allowed, a pulsing red dot with a white
+  outline marks your actual location above the radar. The view centers there
+  unless you have already navigated elsewhere. The home button refreshes your
+  location and recenters the map. Denying location leaves radar fully usable.
 - **Keyboard:** Space plays/pauses, left/right arrows step scans, `+`/`-` zoom,
   Escape closes settings, and `0` requests location.
 - The small timing label reports the PNG's fetch/decode time, including any

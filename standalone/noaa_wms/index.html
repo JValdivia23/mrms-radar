@@ -1569,18 +1569,38 @@ function changeZoom(delta) {
 }
 function openPanel() { $('sidePanel').classList.add('open'); $('backdrop').classList.add('show'); }
 function closePanel() { $('sidePanel').classList.remove('open'); $('backdrop').classList.remove('show'); }
-function resetView() {
-  if (!navigator.geolocation) { $('loopStatus').textContent = 'Location is unavailable in this browser'; return; }
-  $('loopStatus').textContent = 'Finding your location…';
-  navigator.geolocation.getCurrentPosition(position => {
-    S.lat = Math.max(-80, Math.min(80, position.coords.latitude)); S.lon = position.coords.longitude; S.zoom = 7;
-    if (userMarker) userMarker.setLatLng([S.lat, S.lon]);
-    else userMarker = L.marker([S.lat, S.lon], {interactive: false, zIndexOffset: 1000,
+function updateUserMarker(lat, lon) {
+  if (userMarker) userMarker.setLatLng([lat, lon]);
+  else {
+    userMarker = L.marker([lat, lon], {interactive: false, keyboard: false,
+      zIndexOffset: 1000, title: 'Your location',
       icon: L.divIcon({className: 'glowing-location-dot', iconSize: [24, 24], iconAnchor: [12, 12]})}).addTo(leafletMap);
+    const element = userMarker.getElement();
+    if (element) { element.setAttribute('role', 'img'); element.setAttribute('aria-label', 'Your location'); }
+  }
+}
+function locateUser({startup = false} = {}) {
+  if (!navigator.geolocation) {
+    if (!startup) $('loopStatus').textContent = 'Location is unavailable in this browser';
+    return;
+  }
+  const revision = S.revision;
+  if (!startup) $('loopStatus').textContent = 'Finding your location…';
+  navigator.geolocation.getCurrentPosition(position => {
+    const {latitude, longitude} = position.coords;
+    updateUserMarker(latitude, longitude);
+    // A late permission response must not replace a view the user has chosen.
+    if (revision !== S.revision || $('mapContainer').classList.contains('dragging')) return;
+    S.lat = Math.max(-80, Math.min(80, latitude)); S.lon = longitude;
+    if (!startup) S.zoom = 7;
     S.mode = 'live'; viewChanged();
-  }, () => { $('loopStatus').textContent = 'Location unavailable · use the map to choose an area'; },
+  }, () => {
+    if (!startup && revision === S.revision)
+      $('loopStatus').textContent = 'Location unavailable · use the map to choose an area';
+  },
   {timeout: 5000, maximumAge: 600000});
 }
+function resetView() { locateUser(); }
 function bindGestures() {
   const target = $('mapContainer'), pointers = new Map();
   let gesture = null, wheelTimer = null, wheelDelta = 0;
@@ -1668,7 +1688,10 @@ async function init() {
     if (S.mode === 'live') fetchImage(true);
     if (S.mode === 'playing') loadLoop(true);
   }, REFRESH_MS);
-  bindGestures(); badge(); fetchLegend(); renderTime(); await fetchImage();
+  bindGestures(); badge(); fetchLegend(); renderTime();
+  const firstImage = fetchImage();
+  locateUser({startup: true});
+  await firstImage;
 }
 init().catch(showError);
 
