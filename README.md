@@ -1,12 +1,35 @@
-# MRMS Radar — CLI, Web Server, & Standalone PWA
+# MRMS Radar
 
-MRMS Radar is a powerful command-line interface (CLI) and responsive Windy-style web application designed to fetch and render raw radar imagery directly from the NOAA/NSSL Multi-Radar Multi-Sensor (MRMS) Operational Product Viewer. 
+A browser radar viewer with live imagery, playback, and archived observations,
+plus the original Python CLI and web server.
 
-There are no heavy GRIB2 parsers or AWS S3 requirements—just direct, cached, geo-aligned HTTP rendering.
+## Latest standalone version — start here
+
+**[standalone/noaa_wms/index.html](standalone/noaa_wms/index.html) is the latest
+standalone version.** It includes the compact controls, red location dot,
+three-hour history slider, and UTC date/time picker for earlier days.
+
+It is a single HTML file with Leaflet and the default basemap embedded. No
+Python server, Google authorization, proxy, API key, or build step is required.
+Live base/composite reflectivity comes directly from NOAA WMS; older scans come
+from NOAA's public archive and are decoded in the browser. Coverage is the
+contiguous United States.
+
+1. **[Download the latest HTML](https://raw.githubusercontent.com/JValdivia23/mrms-radar/main/standalone/noaa_wms/index.html)**
+   and save it as `index.html` (use Save link as if the browser displays its source).
+2. Open the saved file in a modern browser. Internet access is needed for radar
+   observations and legends; the default basemap is embedded.
+3. To put it on a personal website, upload that same HTML file to static hosting.
+   HTTPS allows browser location access when permission is granted.
+
+See the **[standalone guide](standalone/noaa_wms/README.md)** for controls,
+archive decoding, browser requirements, and validation details. The older
+experiments and Python tools below remain available for their broader product
+catalog and alternative workflows.
 
 ---
 
-## Key Features
+## Original CLI and web app features
 
 *   **Python CLI**: Fetch, cache, and save radar images for any location, zoom level, and product directly from your terminal.
 *   **FastAPI Web Server**: Serves a dynamic JSON API mapping geographic timezones and proxying NOAA rendering endpoints.
@@ -50,8 +73,8 @@ static/
 ### Setup
 Clone the repository and install core dependencies:
 ```bash
-git clone <this-repo>
-cd radar_app
+git clone https://github.com/JValdivia23/mrms-radar.git
+cd mrms-radar
 pip install -r requirements.txt
 ```
 
@@ -104,17 +127,14 @@ Open **`http://127.0.0.1:8000`** in your browser to view the interactive map and
 
 ---
 
-## Standalone HTML experiment
+## Standalone versions
 
-The new [direct NOAA WMS experiment](standalone/noaa_wms/README.md) runs from a
-single [HTML file](standalone/noaa_wms/index.html), with its map assets embedded.
-It retrieves base/composite reflectivity PNGs and real scan timestamps directly
-from NOAA, without Google authorization or a proxy. It includes historical
-scrubbing, animation, image caching, and compact playback controls. This
-experiment covers the contiguous U.S.; the broader product catalog remains in `pure_js`.
-Its three-hour slider shows elapsed time, and the menu's UTC date/time picker
-opens earlier days using NOAA's public archive. Older images are decoded in a
-background worker, preserving the fast WMS path for recent observations.
+| Version | Status and purpose |
+| --- | --- |
+| **[noaa_wms](standalone/noaa_wms/README.md)** | **Latest standalone version.** One self-contained HTML file; direct NOAA access, compact controls, three-hour history, and past-date selection. |
+| [pure_js](standalone/pure_js/README.md) | Earlier Google Apps Script proxy experiment, retaining the broader MRMS product catalog. Requires a configured, authorized proxy. |
+| [wasm_console](standalone/wasm_console/index.html) | Earlier WebAssembly console experiment. |
+| [static](static/index.html) | Original frontend used by the Python web server. |
 
 The Google-proxy experiment is [standalone/pure_js/index.html](standalone/pure_js/index.html).
 Open it directly with `file://`; no local Python server is required. The

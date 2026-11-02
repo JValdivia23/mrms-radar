@@ -1,9 +1,17 @@
-# Direct NOAA radar experiment
+# Latest standalone version — direct NOAA radar
+
+This is the project's **latest standalone version**, including compact playback
+controls, the red location marker, a three-hour timeline, and past-date selection.
+The earlier `pure_js` and `wasm_console` folders retain previous experiments.
 
 Open `index.html` in a browser. It is a single runnable HTML file: Leaflet
 1.9.4, its CSS/images/license, and the Natural Earth basemap are embedded.
 Copying the HTML alone is sufficient. No Python server, Google Apps Script
 deployment, sign-in, API key, or build step is required.
+
+To use it on a personal website, upload this same `index.html` to static hosting.
+Use HTTPS for browser location access, which still requires the visitor's
+permission. Radar data is fetched by the visitor's browser directly from NOAA.
 
 Live radar and legends require internet access. The default Natural Earth map
 does not; optional Mapnik and Satellite maps use their own public tile services.
