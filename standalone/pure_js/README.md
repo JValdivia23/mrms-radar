@@ -1,4 +1,40 @@
-# Google Apps Script CORS Proxy Setup (Lightweight Mode)
+# Pure JavaScript standalone experiment
+
+`index.html` is the current browser-only radar experiment. Open it directly via
+`file://` without running the Python server. It includes the product catalog,
+radar controls, and animation player, and uses a Google Apps Script CORS proxy
+for NOAA radar images and legends.
+
+The goal is a single HTML file. The current build still needs
+`natural-earth.js` and `natural-earth-data.js` beside it and loads Leaflet JS/CSS
+from a CDN. Live radar requires an internet connection and the configured proxy.
+
+## Google authorization and credentials
+
+**Known setup limitation:** the standalone experiment depends on a Google Apps
+Script deployment authorized by its owner. Opening or copying the HTML does not
+create that deployment or grant its Google permissions. The checked-in
+`GOOGLE_SCRIPT_PROXY` value points to an existing deployment; configure your own
+deployment for an independent copy.
+
+- **Proxy owner:** sign in with a Google Account, create/deploy the script, and
+  approve its permission to make external requests. `UrlFetchApp` requires the
+  `https://www.googleapis.com/auth/script.external_request` OAuth scope, normally
+  detected automatically by Apps Script. See Google's [URL Fetch documentation](https://developers.google.com/apps-script/reference/url-fetch).
+- **Radar viewer:** with **Execute as: Me** and **Who has access: Anyone**
+  (anonymous access), requests run with the owner's authorization. Viewers should
+  not need their own Google login. **Anyone with Google account**, domain-only
+  access, or executing as the accessing user introduces a sign-in dependency.
+  See Google's [web app permissions](https://developers.google.com/apps-script/guides/web#permissions)
+  and [access settings](https://developers.google.com/apps-script/manifest/web-app-api-executable#webapp).
+- **HTML configuration:** only the deployed `/exec` URL is stored in the page.
+  Google account credentials and authorization stay with Google. No Google Maps
+  API key is needed for the bundled Natural Earth basemap.
+
+The page uses background `fetch()` requests and has no interactive Google sign-in
+flow. If the proxy redirects to a login or consent page, the map shell can load
+while radar and legends fail. This dependency remains even when the HTML is
+opened locally or hosted on a static website.
 
 ## Background maps
 
@@ -13,11 +49,13 @@ https://www.naturalearthdata.com/about/terms-of-use/ . Regenerate the data with
 `python tools/build_natural_earth.py` from the project root. The standalone
 builder copies the bundled map assets automatically.
 
-To run the Lightweight Pure JS standalone page, you need to configure your own Google Apps Script to act as a private CORS proxy. This requires no servers, is completely free, and will bypass CORS restrictions safely.
+The proxy runs on Google's infrastructure, so no local server is needed. Requests
+use the deploying account's [Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas).
+With anonymous access enabled, the endpoint is publicly callable.
 
 ---
 
-### Step 1: Create the Google Apps Script
+## Step 1: Create the Google Apps Script
 
 1. Go to **[script.google.com](https://script.google.com/)** and sign in with your Google Account.
 2. Click **New Project** in the upper left corner.
@@ -53,28 +91,71 @@ function doGet(e) {
 
 ---
 
-### Step 2: Deploy the Script
+## Step 2: Deploy and authorize the script
 
 1. Click the blue **Deploy** button in the top right and select **New deployment**.
 2. Click the gear icon next to "Select type" and choose **Web app**.
 3. Fill out the configuration fields:
    * **Description**: `MRMS Standalone Radar Proxy`
    * **Execute as**: `Me (your-email@gmail.com)`
-   * **Who has access**: **`Anyone`** (This is crucial so the browser can contact it).
+   * **Who has access**: **`Anyone`** (anonymous access, not `Anyone with Google account`).
 4. Click **Deploy**.
-5. Copy the generated **Web app URL** (it should look like `https://script.google.com/macros/s/XXXXXX/exec`).
+5. If prompted, select **Authorize access**, choose the deploying account, and
+   review and approve the external-request permission. Google may show an
+   unverified-app notice for a personal script; see the [authorization guide](https://developers.google.com/apps-script/guides/services/authorization).
+6. Copy the generated **Web app URL** (it should look like `https://script.google.com/macros/s/XXXXXX/exec`).
+   Use the deployed `/exec` URL, not the editor-only `/dev` test URL.
+
+If your managed Google Workspace account does not offer anonymous access, this
+deployment cannot provide the intended login-free proxy. Check the account's
+deployment policy with its administrator.
 
 ---
 
-### Step 3: Insert Your URL
+## Step 3: Insert your URL
 
-Open your compiled `standalone/pure_js/index.html` file, locate line 2616 (or search for `GOOGLE_SCRIPT_PROXY`):
+Open `standalone/pure_js/index.html` and search for `GOOGLE_SCRIPT_PROXY`:
 
 ```javascript
 const GOOGLE_SCRIPT_PROXY = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
 ```
 
 Replace `https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec` with your copied web app URL, save the file, and you are ready to go!
+
+## Check access and troubleshoot authorization
+
+1. Open your deployment's `/exec` URL in a signed-out/private browser window.
+   Without a `url` parameter, the sample script should return
+   `Error: url parameter is required`. This confirms anonymous access to the
+   handler, but does not yet test its outbound-request permission.
+2. Test a legend through the proxy by appending the following query to your
+   `/exec` URL:
+
+   ```text
+   ?url=https%3A%2F%2Fmrms.nssl.noaa.gov%2Fqvs%2Fproduct_viewer%2Fshared%2Ffetch_svg_legend_via_config.php%3Fweb_resources_dir%3D%2Fvar%2Fwww%2Fhtml%2Fqvs%2Fproduct_viewer%2Fresources%2F%26config_name%3Dtitle_and_legend_config.txt%26product%3DM3DL13
+   ```
+
+   The expected result is base64 text that decodes to SVG, rather than a Google
+   login/consent page or `Error: ...`. The proxy returns base64 for both SVG
+   legends and PNG radar frames.
+3. Open `index.html`, confirm radar and the legend load, and play a loop. In
+   browser developer tools, inspect requests to `script.google.com` and the
+   redirected `script.googleusercontent.com` response if loading fails.
+
+- **Google sign-in, consent, or access-denied page:** check **Execute as: Me**,
+  anonymous **Anyone** access, and the `/exec` URL. A successful owner-only test
+  does not establish anonymous access. Signing in in another tab is not a
+  substitute for configuring the deployed endpoint for background requests.
+- **Authorization required or revoked:** the owner must authorize the script
+  again in Apps Script. Changes that add scopes can require new consent; see
+  Google's [authorization guide](https://developers.google.com/apps-script/guides/services/authorization).
+  After changing script code, publish a new version through **Deploy → Manage
+  deployments**; saving in the editor alone does not update the deployed version.
+- **Base64/decode errors, non-PNG responses, or `Radar proxy request failed`:**
+  inspect the response body. The HTML expects base64 bytes, so a Google HTML
+  error page or the sample proxy's plain-text error cannot be rendered as radar.
+- **Quota errors:** review the deployment's Apps Script execution log and account
+  quotas. Loop playback shares the same owner's request allowance.
 
 ## Retrieval and loops
 

@@ -104,6 +104,28 @@ Open **`http://127.0.0.1:8000`** in your browser to view the interactive map and
 
 ---
 
+## Standalone HTML experiment
+
+The current browser-only experiment is [standalone/pure_js/index.html](standalone/pure_js/index.html).
+Open it directly with `file://`; no local Python server is required. The
+`standalone/` directory also contains a WebAssembly console experiment in
+`wasm_console/`.
+
+**Remaining setup dependency: Google authorization.** In standalone mode, radar
+images and legends go through the Google Apps Script web app configured by
+`GOOGLE_SCRIPT_PROXY` in the HTML. Its owner must sign in to Google and authorize
+outbound requests. The intended deployment runs as the owner and allows anonymous
+access; a deployment requiring viewer sign-in cannot complete that sign-in through
+the page's background requests. See the [proxy setup and troubleshooting guide](standalone/pure_js/README.md#google-authorization-and-credentials)
+and Google's [web app permissions documentation](https://developers.google.com/apps-script/guides/web#permissions).
+
+The goal is a single HTML file, but the current build still loads
+`natural-earth.js` and `natural-earth-data.js` from beside the HTML and Leaflet
+from a CDN. The default Natural Earth basemap needs no API key; live radar still
+requires the proxy and an internet connection.
+
+---
+
 ## Spatial Utilities & Bounds
 
 Because the NOAA renderer processes coordinates in standard Web Mercator (`EPSG:3857`), the exact geographic bounding box for any rendered image can be computed. You can call `.get_bounds()` on any `RadarImage` dataclass:
