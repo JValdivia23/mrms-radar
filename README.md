@@ -112,6 +112,9 @@ It retrieves base/composite reflectivity PNGs and real scan timestamps directly
 from NOAA, without Google authorization or a proxy. It includes historical
 scrubbing, animation, image caching, and request timing. This experiment covers
 the contiguous U.S.; the broader product catalog remains in `pure_js`.
+Its three-hour slider shows elapsed time, and the menu's UTC date/time picker
+opens earlier days using NOAA's public archive. Older images are decoded in a
+background worker, preserving the fast WMS path for recent observations.
 
 The Google-proxy experiment is [standalone/pure_js/index.html](standalone/pure_js/index.html).
 Open it directly with `file://`; no local Python server is required. The

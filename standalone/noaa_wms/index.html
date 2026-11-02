@@ -901,6 +901,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     display:flex;justify-content:space-between;
     font-size:10px;color:var(--text-muted);margin-top:2px;
   }
+  .time-labels button{
+    border:0;background:none;color:inherit;font:inherit;padding:6px 2px;
+    cursor:pointer;white-space:nowrap;border-radius:4px;
+  }
+  .time-labels button:hover{color:var(--text);background:rgba(255,255,255,.08)}
+  .time-labels button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
   /* ── Zoom stack (desktop) ── */
   /* ── Colorbar ── */
@@ -974,6 +980,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .time-display{font-size:24px}
   .map-error{pointer-events:auto}
   .section-label{display:block}
+  .date-fields{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;margin:10px 0}
+  .date-fields label{font-size:11px;color:var(--text-muted)}
+  .date-fields input{box-sizing:border-box;min-width:0;width:100%;margin-top:5px;padding:10px 8px;color:var(--text);color-scheme:dark;background:#ffffff0d;border:1px solid var(--panel-border);border-radius:8px;font:inherit}
+  .date-actions{display:flex;align-items:center;gap:8px}
+  .date-actions button{flex:1;min-height:34px;color:var(--text);background:#ffffff0d;border:1px solid var(--panel-border);border-radius:8px;cursor:pointer;font:12px inherit}
+  .date-actions button[type=submit]{background:#285d9c}
+  .date-actions button:disabled{opacity:.5;cursor:wait}
+  .date-status{font-size:11px;line-height:1.5;color:var(--text-muted);margin-top:8px}
+  .time-offset{text-align:center;font-size:13px;font-weight:500;color:var(--text)}
+  .time-range-hint{font-size:10px;color:var(--text-muted);text-align:center}
   @media(max-width:640px){.colorbar{top:20px;height:auto;width:calc(100vw - 130px)}.time-display{font-size:20px}.map-credit{max-width:calc(100vw - 12px);font-size:9px}}
 </style>
 </head>
@@ -1013,6 +1029,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <select id="productSelect" aria-label="Radar product"></select>
     <p style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.5">Contiguous U.S. radar, directly from NOAA.</p>
   </div>
+
+  <form id="dateForm">
+    <div class="section-label">Go to date · UTC</div>
+    <div class="date-fields">
+      <label for="goDate">Date<input id="goDate" type="date" aria-label="Radar date (UTC)" required></label>
+      <label for="goTime">Time (UTC)<input id="goTime" type="time" step="60" aria-label="Radar time (UTC)" required></label>
+    </div>
+    <div class="date-actions">
+      <button type="button" onclick="shiftDay(-1)" aria-label="Previous day">−1 day</button>
+      <button type="submit" id="dateGo">Go to date</button>
+      <button type="button" onclick="shiftDay(1)" aria-label="Next day">+1 day</button>
+    </div>
+    <div class="date-status" id="dateStatus" role="status">Select a past date and time. The nearest prior scan will be shown.</div>
+  </form>
 
   <!-- Zoom -->
   <div>
@@ -1071,19 +1101,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <div id="requestStatus" style="font-size:11px;color:var(--text-muted);text-align:center"></div>
   <div id="loopStatus" role="status" style="font-size:11px;opacity:.7;text-align:center"></div>
+  <output id="timeOffset" class="time-offset" for="timeSlider">Recent 3 hours</output>
   <div class="time-controls">
     <button class="time-nav" onclick="stepTime(1)" title="Previous frame">◀</button>
     <div class="time-slider-wrap">
-      <input type="range" min="0" max="48" value="48" id="timeSlider" aria-label="Radar scan time">
+      <input type="range" min="0" max="10800" step="1" value="10800" id="timeSlider" aria-label="Radar scan time">
       <div class="time-labels">
-        <span id="labelStart">--:--</span>
-        <span id="labelEnd">NOW</span>
+        <button type="button" id="labelStart" onclick="jumpHours(3)" aria-label="Go back 3 hours">−3 h</button>
+        <button type="button" onclick="jumpHours(2)" aria-label="Go back 2 hours">−2 h</button>
+        <button type="button" onclick="jumpHours(1)" aria-label="Go back 1 hour">−1 h</button>
+        <button type="button" id="labelEnd" onclick="jumpHours(0)" aria-label="Go to end of time window">NOW</button>
       </div>
     </div>
     <button class="time-nav" onclick="stepTime(-1)" title="Next frame">▶</button>
     <button class="time-nav now-btn" id="livePauseBtn" onclick="toggleLivePause()">⏸</button>
     <button class="time-nav now-btn" onclick="goLive()">NOW</button>
   </div>
+  <div id="timeRangeHint" class="time-range-hint">Recent 3 hours</div>
 </div>
 
 <!--
@@ -1193,12 +1227,240 @@ window.MRMSNaturalEarth = {
 
 const $ = id => document.getElementById(id);
 const PRODUCTS = [
-  {id: 'conus_bref_qcd', name: 'Base reflectivity'},
-  {id: 'conus_cref_qcd', name: 'Composite reflectivity'},
+  {id: 'conus_bref_qcd', name: 'Base reflectivity', archive: 'MergedBaseReflectivityQC_00.50', category: 11},
+  {id: 'conus_cref_qcd', name: 'Composite reflectivity', archive: 'MergedReflectivityQCComposite_00.50', category: 10},
 ];
 const IMAGE_WIDTH = 920, IMAGE_HEIGHT = 630;
 const FRAME_LIMIT = 18, REFRESH_MS = 30000;
 const WMS_ROOT = 'https://opengeo.ncep.noaa.gov/geoserver/conus/';
+const ARCHIVE_ROOT = 'https://noaa-mrms-pds.s3.amazonaws.com/';
+const HISTORY_MS = 3 * 60 * 60 * 1000;
+// NOAA/NSSL's published BASE_REFL scale, low to high, in 5 dBZ bins from -35.
+const ARCHIVE_PALETTE = [[221,254,255],[216,210,233],[208,175,212],[163,127,167],
+  [115,74,119],[214,212,173],[169,168,125],[119,119,119],[0,236,236],[1,160,246],
+  [0,0,246],[0,255,0],[0,200,0],[0,144,0],[255,255,0],[231,192,0],[255,144,0],
+  [255,0,0],[220,0,0],[192,0,0],[255,0,255],[153,85,201]];
+
+// Source-specific MRMS GRIB2/PNG decoder. Runs in a disposable worker so the
+// 7000x3500 source never blocks map controls or becomes a full RGBA texture.
+function archiveWorker() {
+  const LIMIT = 64 * 1024 * 1024;
+  async function inflate(bytes, format, limit) {
+    const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format)).getReader();
+    const chunks = []; let length = 0;
+    try {
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        length += value.length;
+        if (length > limit) throw Error('Archive image exceeds the supported size');
+        chunks.push(value);
+      }
+    } finally { await reader.cancel().catch(() => {}); }
+    const result = new Uint8Array(length); let offset = 0;
+    for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+    return result;
+  }
+  const crcTable = Uint32Array.from({length: 256}, (_, value) => {
+    for (let i = 0; i < 8; i++) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    return value >>> 0;
+  });
+  function crc(bytes) {
+    let value = 0xffffffff;
+    for (const byte of bytes) value = crcTable[(value ^ byte) & 255] ^ (value >>> 8);
+    return (value ^ 0xffffffff) >>> 0;
+  }
+  function paeth(a, b, c) {
+    const p = a + b - c, da = Math.abs(p - a), db = Math.abs(p - b), dc = Math.abs(p - c);
+    return da <= db && da <= dc ? a : db <= dc ? b : c;
+  }
+  self.onmessage = async ({data: job}) => {
+    try {
+      const grib = await inflate(new Uint8Array(job.bytes), 'gzip', LIMIT);
+      const view = new DataView(grib.buffer), text = (bytes) => String.fromCharCode(...bytes);
+      const require = (valid, message) => { if (!valid) throw Error(message); };
+      require(grib.length >= 20 && text(grib.subarray(0, 4)) === 'GRIB' && grib[6] === 209 && grib[7] === 2,
+        'Unsupported archived radar format');
+      require(view.getUint32(8) === 0 && view.getUint32(12) === grib.length, 'Invalid archive message length');
+      let offset = 16;
+      function section(number, minimum) {
+        require(offset + 5 <= grib.length - 4, 'Truncated archive section');
+        const length = view.getUint32(offset);
+        require(length >= minimum && offset + length <= grib.length - 4 && grib[offset + 4] === number,
+          'Unsupported archive section layout');
+        const bytes = grib.subarray(offset, offset + length); offset += length;
+        return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      }
+      const id = section(1, 21);
+      require(id.getUint16(5) === 161 && id.getUint8(7) === 0 && id.getUint8(11) === 3,
+        'Unsupported archive origin or time type');
+      const stamp = new Date(Date.UTC(id.getUint16(12), id.getUint8(14) - 1, id.getUint8(15),
+        id.getUint8(16), id.getUint8(17), id.getUint8(18))).toISOString();
+      require(stamp === job.time, 'Archive observation time does not match the requested scan');
+      const grid = section(3, 72), width = grid.getUint32(30), height = grid.getUint32(34);
+      require(grid.getUint16(12) === 0 && width === 7000 && height === 3500 && grid.getUint8(71) === 0 &&
+        grid.getUint8(14) === 2 && grid.getUint32(63) === 10000 && grid.getUint32(67) === 10000 &&
+        grid.getUint32(46) === 54995000 && grid.getUint32(50) === 230005000 &&
+        ((grid.getUint32(38) === 1 && grid.getUint32(42) === 1000000) ||
+          (grid.getUint32(38) === 0 && grid.getUint32(42) === 0xffffffff)),
+        'Unsupported archive map grid');
+      const product = section(4, 34);
+      require(product.getUint16(5) === 0 && product.getUint16(7) === 0 &&
+        product.getUint8(9) === job.category && product.getUint8(10) === 0 &&
+        product.getUint8(22) === 102 && product.getUint8(23) === 0 && product.getUint32(24) === 500,
+        'Archive product does not match the selected reflectivity');
+      const packing = section(5, 21);
+      require(packing.getUint32(5) === width * height && packing.getUint16(9) === 41 &&
+        packing.getUint8(19) === 16 && packing.getUint8(20) === 0, 'Unsupported archive packing');
+      const signed = n => n & 0x8000 ? -(n & 0x7fff) : n;
+      const reference = packing.getFloat32(11), binary = signed(packing.getUint16(15)), decimal = signed(packing.getUint16(17));
+      require(Number.isFinite(reference) && Math.abs(binary) <= 32 && Math.abs(decimal) <= 32, 'Invalid archive value scale');
+      require(section(6, 6).getUint8(5) === 255, 'Archive bitmaps are unsupported');
+      const pixels = section(7, 13);
+      require(offset === grib.length - 4 && text(grib.subarray(offset)) === '7777', 'Invalid archive message ending');
+      const png = new Uint8Array(pixels.buffer, pixels.byteOffset + 5, pixels.byteLength - 5);
+      require([137,80,78,71,13,10,26,10].every((n, i) => png[i] === n), 'Invalid archive PNG');
+      const pngView = new DataView(png.buffer, png.byteOffset, png.byteLength), chunks = [];
+      let position = 8, total = 0, seenHeader = false, seenEnd = false;
+      while (position + 12 <= png.length) {
+        const length = pngView.getUint32(position);
+        require(length <= png.length - position - 12, 'Truncated archive PNG');
+        const kind = text(png.subarray(position + 4, position + 8));
+        const body = png.subarray(position + 8, position + 8 + length);
+        require(crc(png.subarray(position + 4, position + 8 + length)) === pngView.getUint32(position + 8 + length), 'Archive PNG checksum failed');
+        if (kind === 'IHDR') {
+          require(!seenHeader && position === 8 && length === 13 &&
+            pngView.getUint32(position + 8) === width && pngView.getUint32(position + 12) === height &&
+            body[8] === 16 && body[9] === 0 && body[10] === 0 && body[11] === 0 && body[12] === 0,
+            'Unsupported archive PNG profile');
+          seenHeader = true;
+        } else if (kind === 'IDAT') {
+          require(seenHeader && !seenEnd, 'Invalid archive PNG chunk order'); chunks.push(body); total += length;
+        } else if (kind === 'IEND') {
+          require(seenHeader && chunks.length > 0 && length === 0 && position + 12 === png.length, 'Invalid archive PNG ending');
+          seenEnd = true;
+        } else throw Error('Unsupported archive PNG chunk');
+        position += length + 12;
+      }
+      require(seenEnd && position === png.length, 'Incomplete archive PNG');
+      const compressed = new Uint8Array(total); let copied = 0;
+      for (const chunk of chunks) { compressed.set(chunk, copied); copied += chunk.length; }
+      const stride = width * 2, raw = await inflate(compressed, 'deflate', (stride + 1) * height);
+      require(raw.length === (stride + 1) * height, 'Invalid archive raster size');
+      const [west, south, east, north] = job.bbox, radius = 6378137, degrees = 180 / Math.PI;
+      const columns = Array.from({length: job.width}, (_, x) =>
+        Math.floor(((west + (x + 0.5) / job.width * (east - west)) / radius * degrees + 130) / 0.01));
+      const rows = new Map();
+      for (let y = 0; y < job.height; y++) {
+        const latitude = Math.atan(Math.sinh((north - (y + 0.5) / job.height * (north - south)) / radius)) * degrees;
+        const row = Math.floor((55 - latitude) / 0.01);
+        if (row >= 0 && row < height) { if (!rows.has(row)) rows.set(row, []); rows.get(row).push(y); }
+      }
+      const rgba = new Uint8ClampedArray(job.width * job.height * 4);
+      // Precompute all 16-bit sample colors; missing/no-coverage stay transparent.
+      const lookup = new Uint8ClampedArray(65536 * 4);
+      for (let sample = 0; sample < 65536; sample++) {
+        const dbz = (reference + sample * 2 ** binary) / 10 ** decimal;
+        if (dbz === -99 || dbz === -999 || dbz < -35) continue;
+        const color = job.palette[Math.max(0, Math.min(job.palette.length - 1, Math.floor((dbz + 35) / 5)))];
+        lookup.set([...color, 255], sample * 4);
+      }
+      let previous = new Uint8Array(stride), current = new Uint8Array(stride);
+      for (let row = 0; row < height; row++) {
+        const start = row * (stride + 1), filter = raw[start];
+        require(filter <= 4, 'Unsupported archive PNG row filter');
+        for (let x = 0; x < stride; x++) {
+          const left = x >= 2 ? current[x - 2] : 0, up = previous[x], corner = x >= 2 ? previous[x - 2] : 0;
+          current[x] = raw[start + x + 1] + (filter === 0 ? 0 : filter === 1 ? left : filter === 2 ? up :
+            filter === 3 ? Math.floor((left + up) / 2) : paeth(left, up, corner));
+        }
+        for (const y of rows.get(row) || []) for (let x = 0; x < job.width; x++) {
+          const column = columns[x];
+          if (column < 0 || column >= width) continue;
+          const sample = current[column * 2] * 256 + current[column * 2 + 1], at = (y * job.width + x) * 4;
+          rgba.set(lookup.subarray(sample * 4, sample * 4 + 4), at);
+        }
+        [previous, current] = [current, previous];
+      }
+      self.postMessage({rgba: rgba.buffer}, [rgba.buffer]);
+    } catch (error) { self.postMessage({error: error.message}); }
+  };
+}
+
+function utcDay(time) { return new Date(time).toISOString().slice(0, 10); }
+function historyTimes(times, end = Date.now()) {
+  const cutoff = end - HISTORY_MS;
+  return [...new Set(times)].filter(time => Date.parse(time) >= cutoff && Date.parse(time) <= end).sort();
+}
+function mergeRecentTimes(wms, archive, end = Date.now()) {
+  // GIS publication and the raw observation can differ by a few seconds.
+  // Prefer the WMS timestamp for each recent cycle instead of listing it twice.
+  const observations = wms.map(Date.parse);
+  return historyTimes([...wms, ...archive.filter(time =>
+    !observations.some(stamp => Math.abs(stamp - Date.parse(time)) < 60000))], end);
+}
+function nearestScan(times, target) {
+  if (!times.length) return null;
+  // Choose a real scan at or before the requested instant; never label a
+  // nearest-future server fallback as though it was the requested observation.
+  return times.filter(time => Date.parse(time) <= target).at(-1) || times[0];
+}
+function elapsedLabel(milliseconds) {
+  const minutes = Math.max(0, Math.round(milliseconds / 60000));
+  if (minutes < 1) return 'less than 1 min';
+  return [Math.floor(minutes / 60) ? Math.floor(minutes / 60) + ' h' : '', minutes % 60 ? minutes % 60 + ' min' : ''].filter(Boolean).join(' ');
+}
+function parseArchivePage(xml, product, day) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagNameNS('*', 'parsererror').length || doc.documentElement.localName !== 'ListBucketResult')
+    throw Error('Invalid NOAA archive listing');
+  const value = (element, name) => [...element.children].find(child => child.localName === name)?.textContent.trim();
+  const name = PRODUCTS.find(p => p.id === product).archive, digits = day.replaceAll('-', '');
+  const prefix = `CONUS/${name}/${digits}/MRMS_${name}_`;
+  const records = [];
+  for (const element of doc.getElementsByTagNameNS('*', 'Contents')) {
+    const key = value(element, 'Key') || '';
+    if (!key.startsWith(prefix)) continue;
+    const match = /^(\d{8})-(\d{2})(\d{2})(\d{2})\.grib2\.gz$/.exec(key.slice(prefix.length));
+    if (!match || match[1] !== digits) continue;
+    const time = `${day}T${match[2]}:${match[3]}:${match[4]}.000Z`;
+    if (Number.isFinite(Date.parse(time)) && new Date(time).toISOString() === time) records.push({time, key});
+  }
+  const truncated = value(doc.documentElement, 'IsTruncated') === 'true';
+  const token = value(doc.documentElement, 'NextContinuationToken');
+  if (truncated && !token) throw Error('Incomplete NOAA archive listing');
+  return {records, token: truncated ? token : null};
+}
+async function decodeArchive(blob, record, product, bbox, signal) {
+  if (typeof Worker === 'undefined' || typeof DecompressionStream === 'undefined')
+    throw Error('Archive images require a browser with Web Workers and gzip support');
+  if (signal.aborted) throw abortError();
+  const bytes = await blob.arrayBuffer();
+  if (signal.aborted) throw abortError();
+  if (bytes.byteLength > 64 * 1024 * 1024) throw Error('Archive file is too large');
+  const url = URL.createObjectURL(new Blob(['(' + archiveWorker.toString() + ')()'], {type: 'text/javascript'}));
+  const worker = new Worker(url);
+  try {
+    const rgba = await new Promise((resolve, reject) => {
+      const finish = callback => value => { clearTimeout(timer); signal.removeEventListener('abort', abort); callback(value); };
+      const abort = () => finish(reject)(abortError());
+      const timer = setTimeout(() => finish(reject)(Error('Archive decoding timed out')), 30000);
+      signal.addEventListener('abort', abort, {once: true});
+      worker.onerror = () => finish(reject)(Error('Archive decoding failed'));
+      worker.onmessage = ({data}) => data.error ? finish(reject)(Error(data.error)) : finish(resolve)(data.rgba);
+      worker.postMessage({bytes, time: record.time, category: product.category, bbox,
+        width: IMAGE_WIDTH, height: IMAGE_HEIGHT, palette: ARCHIVE_PALETTE}, [bytes]);
+    });
+    if (signal.aborted) throw abortError();
+    if (!(rgba instanceof ArrayBuffer) || rgba.byteLength !== IMAGE_WIDTH * IMAGE_HEIGHT * 4)
+      throw Error('Invalid archive image output');
+    const canvas = document.createElement('canvas'); canvas.width = IMAGE_WIDTH; canvas.height = IMAGE_HEIGHT;
+    canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), IMAGE_WIDTH, IMAGE_HEIGHT), 0, 0);
+    const result = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!result) throw Error('Could not render the archived image');
+    return result;
+  } finally { worker.terminate(); URL.revokeObjectURL(url); }
+}
 
 function serviceUrl(product) {
   if (!PRODUCTS.some(p => p.id === product)) throw Error('Unknown radar product');
@@ -1272,6 +1534,8 @@ class RadarClient {
     this.catalogs = new Map(); this.catalogPending = new Map();
     this.frames = new Map(); this.pending = new Map(); this.bytes = 0;
     this.active = 0; this.queue = []; this.epoch = 0; this.controllers = new Set();
+    this.days = new Map(); this.dayPending = new Map(); this.archiveObjects = new Map();
+    this.histories = new Map(); this.decodeTail = Promise.resolve();
   }
   async read(url, kind, controller = new AbortController()) {
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -1281,18 +1545,56 @@ class RadarClient {
       return kind === 'text' ? await response.text() : await response.blob();
     } finally { clearTimeout(timer); }
   }
-  async catalog(product, force = false) {
+  async catalog(product, force = false, end = null) {
+    if (end) return this.history(product, end, force);
     const cached = this.catalogs.get(product);
-    if (!force && cached && Date.now() - cached.fetched < REFRESH_MS) return cached.times;
+    const merged = times => mergeRecentTimes(times, this.histories.get(product) || []);
+    if (!force && cached && Date.now() - cached.fetched < REFRESH_MS) return merged(cached.times);
     if (this.catalogPending.has(product)) return this.catalogPending.get(product);
     const pending = (async () => {
       const xml = await this.read(wmsUrl(product, {version: '1.3.0', request: 'GetCapabilities'}), 'text');
       const times = parseCapabilities(xml, product);
       this.catalogs.set(product, {times, fetched: Date.now()});
-      return times;
+      return merged(times);
     })();
     this.catalogPending.set(product, pending);
     try { return await pending; } finally { this.catalogPending.delete(product); }
+  }
+  async day(product, day, force = false) {
+    const cacheKey = product + '|' + day, cached = this.days.get(cacheKey);
+    if (cached && (!force && (day < utcDay(Date.now()) || Date.now() - cached.fetched < REFRESH_MS))) return cached.records;
+    if (this.dayPending.has(cacheKey)) return this.dayPending.get(cacheKey);
+    const pending = (async () => {
+      const prefix = `CONUS/${PRODUCTS.find(p => p.id === product).archive}/${day.replaceAll('-', '')}/`;
+      const records = []; let token = null;
+      for (let page = 0; page < 4; page++) {
+        const params = new URLSearchParams({'list-type': '2', prefix, 'max-keys': '1000'});
+        if (token) params.set('continuation-token', token);
+        const parsed = parseArchivePage(await this.read(ARCHIVE_ROOT + '?' + params, 'text'), product, day);
+        records.push(...parsed.records); token = parsed.token;
+        if (!token) break;
+      }
+      if (token) throw Error('NOAA archive listing exceeds the supported size');
+      records.sort((a, b) => a.time.localeCompare(b.time));
+      this.days.delete(cacheKey); this.days.set(cacheKey, {records, fetched: Date.now()});
+      for (const record of records) this.archiveObjects.set(product + '|' + record.time, record);
+      while (this.days.size > 8) {
+        const oldest = this.days.keys().next().value, oldProduct = oldest.split('|')[0];
+        for (const record of this.days.get(oldest).records) this.archiveObjects.delete(oldProduct + '|' + record.time);
+        this.days.delete(oldest);
+      }
+      return records;
+    })();
+    this.dayPending.set(cacheKey, pending);
+    try { return await pending; } finally { this.dayPending.delete(cacheKey); }
+  }
+  async history(product, end = new Date().toISOString(), force = false) {
+    const limit = Date.parse(end);
+    const days = [...new Set([utcDay(limit - HISTORY_MS), utcDay(limit)])];
+    const pages = await Promise.all(days.map(day => this.day(product, day, force && day === utcDay(Date.now()))));
+    const times = historyTimes(pages.flat().map(record => record.time), limit);
+    if (Math.abs(Date.now() - limit) < REFRESH_MS * 2) this.histories.set(product, times);
+    return times;
   }
   async slot(work) {
     if (this.active >= 3) await new Promise(resolve => this.queue.push(resolve));
@@ -1321,8 +1623,21 @@ class RadarClient {
       if (epoch !== this.epoch) throw abortError();
       const controller = new AbortController();
       this.controllers.add(controller);
-      let blob;
-      try { blob = await this.read(url, 'blob', controller); }
+      let blob, source = 'wms';
+      try {
+        const record = this.archiveObjects.get(product + '|' + time);
+        const wms = this.catalogs.get(product)?.times;
+        const recent = wms?.includes(time) && Date.parse(time) >= Date.parse(wms.at(-1)) - 105 * 60000;
+        if (record && !recent) {
+          source = 'archive';
+          const compressed = await this.read(ARCHIVE_ROOT + record.key, 'blob', controller);
+          const decode = this.decodeTail.catch(() => {}).then(() => {
+            if (epoch !== this.epoch) throw abortError();
+            return decodeArchive(compressed, record, PRODUCTS.find(p => p.id === product), bbox, controller.signal);
+          });
+          this.decodeTail = decode; blob = await decode;
+        } else blob = await this.read(url, 'blob', controller);
+      }
       finally { this.controllers.delete(controller); }
       if (epoch !== this.epoch) throw abortError();
       const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -1341,7 +1656,7 @@ class RadarClient {
         try { image.src = url; await image.decode(); } finally { URL.revokeObjectURL(url); }
       }
       if (epoch !== this.epoch) throw abortError();
-      const frame = {blob, time, bbox, elapsed: performance.now() - started, cached: false};
+      const frame = {blob, time, bbox, source, elapsed: performance.now() - started, cached: false};
       this.frames.set(url, frame); this.bytes += blob.size;
       while (this.frames.size > 72 || this.bytes > 32 * 1024 * 1024) {
         const oldest = this.frames.keys().next().value;
@@ -1367,11 +1682,13 @@ const S = {
   lon: boundedSetting('lon', -104.68, -180, 180), zoom: Math.round(boundedSetting('zoom', 7, 3, 12)),
   basemap: setting('basemap', 'dark'), mode: 'live', times: [], selected: null,
   loop: [], timer: null, revision: 0, updating: null,
+  windowEnd: null, playEnd: null, frameSource: 'wms', historyLoading: false,
 };
 if (!PRODUCTS.some(p => p.id === S.product)) S.product = PRODUCTS[0].id;
 const client = new RadarClient();
 let leafletMap, radarOverlay, displayedUrl = null, userMarker;
 let scrubTarget = null;
+let previewingTimeSlider = false;
 const BASEMAPS = {
   dark: null,
   osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1415,10 +1732,40 @@ function displayFrame(frame) {
   else radarOverlay = L.imageOverlay(url, bounds, {opacity: +$('opacitySlider').value / 100}).addTo(leafletMap);
   if (previous) URL.revokeObjectURL(previous);
   S.selected = frame.time;
+  S.frameSource = frame.source || 'wms'; fetchLegend();
   $('mapLoading').classList.add('hidden'); $('mapError').classList.remove('show');
   $('requestStatus').textContent = frame.cached ? 'From memory' :
     `${(frame.elapsed / 1000).toFixed(2)} s · ${Math.round(frame.blob.size / 1024)} KB`;
   renderTime();
+}
+function windowEndMs() { return S.windowEnd ? Date.parse(S.windowEnd) : Date.now(); }
+function sliderTime(value) {
+  return new Date(windowEndMs() - HISTORY_MS + Number(value) * 1000).toISOString();
+}
+function previewSlider() {
+  const value = Number($('timeSlider').value);
+  const target = sliderTime(value);
+  // Leave the native thumb untouched during input so browsers reliably emit
+  // their change event when the user releases it, even before history loads.
+  previewingTimeSlider = true;
+  try { pause(); scrubTarget = target; renderTime(); }
+  finally { previewingTimeSlider = false; }
+}
+async function selectTime(time) {
+  pause(); scrubTarget = time;
+  $('loopStatus').textContent = 'Loading selected scan…';
+  const request = fetchImage(false, time), revision = S.revision;
+  const loaded = await request;
+  if (!loaded && revision === S.revision) { scrubTarget = null; renderTime(); }
+  return loaded;
+}
+function commitSlider() {
+  const time = scrubTarget || sliderTime($('timeSlider').value);
+  return selectTime(time);
+}
+function jumpHours(hours) {
+  if (hours === 0 && !S.windowEnd) return goLive();
+  return selectTime(new Date(windowEndMs() - hours * 3600000).toISOString());
 }
 function renderTime() {
   const date = S.selected ? new Date(S.selected) : null;
@@ -1430,23 +1777,40 @@ function renderTime() {
   $('livePauseBtn').textContent = S.mode === 'playing' ? '⏸' : '▶';
   $('livePauseBtn').title = S.mode === 'playing' ? 'Pause playback' : 'Play recent scans';
   $('livePauseBtn').setAttribute('aria-label', $('livePauseBtn').title);
-  $('timeSlider').max = Math.max(0, S.times.length - 1);
-  $('timeSlider').value = Math.max(0, S.times.indexOf(scrubTarget || S.selected));
+  const anchor = windowEndMs(), preview = scrubTarget || S.selected;
+  const offset = preview ? Math.max(0, anchor - Date.parse(preview)) : 0;
+  $('timeOffset').textContent = preview ? (S.windowEnd ? elapsedLabel(offset) + ' before ' + new Date(anchor).toISOString().slice(11, 16) + ' UTC' : elapsedLabel(offset) + ' ago') : 'Recent 3 hours';
+  $('timeSlider').max = HISTORY_MS / 1000;
+  if (!previewingTimeSlider)
+    $('timeSlider').value = preview ? Math.max(0, Math.min(HISTORY_MS / 1000, (HISTORY_MS - offset) / 1000)) : HISTORY_MS / 1000;
   $('timeSlider').disabled = !S.times.length;
-  $('labelStart').textContent = S.times[0]?.slice(11, 16) || '--:--';
-  $('labelEnd').textContent = S.times.at(-1)?.slice(11, 16) || '--:--';
+  $('timeSlider').setAttribute('aria-valuetext', preview ? $('timeOffset').textContent + ', ' + preview : 'Recent 3 hours');
+  $('timeSlider').title = preview ? preview + ' · ' + $('timeOffset').textContent : 'Recent 3 hours';
+  $('labelStart').textContent = '−3 h';
+  $('labelEnd').textContent = S.windowEnd ? new Date(anchor).toISOString().slice(11, 16) + ' UTC' : 'NOW';
+  $('timeRangeHint').textContent = S.historyLoading ? 'Loading older scans…' :
+    (S.windowEnd ? 'Archive · ' + utcDay(anchor) : 'Recent 3 hours') + ' · ' + S.times.length + ' scans';
 }
 function fetchLegend() {
   const image = $('legendBar');
+  const key = S.product + '|' + S.frameSource;
+  if (image.dataset.source === key) return;
+  image.dataset.source = key;
   $('colorbarPanel').classList.add('hidden');
   image.onload = () => $('colorbarPanel').classList.remove('hidden');
   image.onerror = () => $('colorbarPanel').classList.add('hidden');
-  image.src = wmsUrl(S.product, {version: '1.1.1', request: 'GetLegendGraphic', format: 'image/png', layer: S.product});
+  if (S.frameSource === 'archive') {
+    const bars = ARCHIVE_PALETTE.map((rgb, i) => `<rect x="${i * 500 / 22}" y="0" width="${500 / 22 + 0.1}" height="14" fill="rgb(${rgb})"/>`).join('');
+    const labels = [-30,-20,-10,0,10,20,30,40,50,60,70].map(value =>
+      `<text x="${(value + 35) / 110 * 500}" y="27" text-anchor="middle" fill="white" font-size="10">${value}</text>`).join('');
+    image.src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="500" height="30">${bars}${labels}</svg>`);
+  } else image.src = wmsUrl(S.product, {version: '1.1.1', request: 'GetLegendGraphic', format: 'image/png', layer: S.product});
   image.alt = PRODUCTS.find(p => p.id === S.product).name + ' color scale in dBZ';
 }
 function stopWork() {
   ++S.revision; client.cancelFrames();
   clearTimeout(S.timer); S.timer = null; S.updating = null;
+  S.historyLoading = false;
   $('animLoading').classList.remove('show');
   return S.revision;
 }
@@ -1456,10 +1820,10 @@ function pause() {
 }
 function showError(error) {
   $('mapLoading').classList.add('hidden'); $('animLoading').classList.remove('show');
-  if (radarOverlay) $('loopStatus').textContent = 'Update unavailable · showing the previous scan';
+  const message = error.name === 'AbortError' ? 'NOAA request timed out. Try again.' : error.message;
+  if (radarOverlay) $('loopStatus').textContent = message + ' · showing the previous scan';
   else {
-    $('mapError').children[1].textContent = error.name === 'AbortError'
-      ? 'NOAA request timed out. Try again.' : error.message;
+    $('mapError').children[1].textContent = message;
     $('mapError').classList.add('show');
   }
 }
@@ -1471,21 +1835,106 @@ async function fetchImage(force = false, requestedTime = null) {
   $('mapLoading').classList.remove('hidden'); $('mapError').classList.remove('show');
   renderTime();
   try {
-    const times = await client.catalog(product, force);
+    let times = await client.catalog(product, force, S.windowEnd);
     if (revision !== S.revision) return;
+    if (requestedTime && !times.includes(requestedTime)) {
+      const older = await client.history(product, S.windowEnd || new Date().toISOString());
+      if (revision !== S.revision) return;
+      times = historyTimes([...times, ...older], windowEndMs());
+      const target = Date.parse(requestedTime), actual = nearestScan(times, target);
+      if (!actual || Math.abs(Date.parse(actual) - target) > 180000)
+        throw Error('No scan is available near the selected time. Try another time or Go to date.');
+      requestedTime = actual;
+    }
     S.times = times;
-    const time = S.mode === 'live' ? times.at(-1) : requestedTime || S.selected || times.at(-1);
-    if (!times.includes(time)) throw Error('This scan has expired. Choose NOW for the latest scan.');
+    let time = S.mode === 'live' ? times.at(-1) : requestedTime || S.selected || times.at(-1);
+    if (!times.includes(time)) {
+      const actual = nearestScan(times, Date.parse(time));
+      if (!actual || Math.abs(Date.parse(actual) - Date.parse(time)) > 180000)
+        throw Error('This scan is outside the current three-hour window. Use Go to date to reopen it.');
+      time = actual;
+    }
     const frame = await client.frame(product, time, bbox);
     if (revision !== S.revision) return;
     scrubTarget = null; displayFrame(frame);
     const age = Date.now() - Date.parse(time);
     $('loopStatus').textContent = age > 10 * 60000 ? 'Latest scan is ' + Math.floor(age / 60000) + ' min old' :
       S.mode === 'live' ? 'Live · ' + times.length + ' scans available' : 'Paused';
-  } catch (error) { if (revision === S.revision) showError(error); }
+    if (S.mode !== 'live') $('loopStatus').textContent = S.windowEnd ? 'Archived scan · ' + utcDay(Date.parse(time)) : 'Paused';
+    if (S.windowEnd) $('dateStatus').textContent = 'Showing ' + time.slice(0, 10) + ' ' + time.slice(11, 19) + ' UTC (nearest prior scan).';
+    if (!S.windowEnd) extendHistory(revision, product);
+    return true;
+  } catch (error) {
+    if (revision === S.revision) {
+      showError(error);
+      if (S.windowEnd) $('dateStatus').textContent = error.message;
+    }
+    return false;
+  }
   finally { if (S.updating === revision) S.updating = null; }
 }
-function goLive() { S.mode = 'live'; scrubTarget = null; fetchImage(true); }
+async function extendHistory(revision, product) {
+  S.historyLoading = true; renderTime();
+  try {
+    const times = await client.history(product);
+    if (revision !== S.revision || product !== S.product || S.windowEnd) return;
+    S.times = mergeRecentTimes(client.catalogs.get(product)?.times || S.times, times);
+  } catch (error) {
+    if (revision === S.revision) $('dateStatus').textContent = 'Older scans are temporarily unavailable. You can retry with Go to date.';
+  } finally {
+    if (revision === S.revision) { S.historyLoading = false; renderTime(); }
+  }
+}
+function fillDateFields(time = S.windowEnd || S.selected || new Date().toISOString()) {
+  $('goDate').value = time.slice(0, 10); $('goTime').value = time.slice(11, 16);
+  $('goDate').max = utcDay(Date.now());
+}
+function requestedDate() {
+  const day = $('goDate').value, time = $('goTime').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}(?::\d{2})?$/.test(time)) throw Error('Choose a date and time in UTC.');
+  const stamp = day + 'T' + time + (time.length === 5 ? ':00' : '') + '.000Z';
+  if (!Number.isFinite(Date.parse(stamp)) || new Date(stamp).toISOString() !== stamp) throw Error('Choose a valid UTC date and time.');
+  if (Date.parse(stamp) > Date.now()) throw Error('Choose a time in the past.');
+  return stamp;
+}
+async function goToDate() {
+  let end;
+  try { end = requestedDate(); } catch (error) { $('dateStatus').textContent = error.message; return; }
+  const previous = {windowEnd: S.windowEnd, times: S.times, playEnd: S.playEnd};
+  const revision = stopWork(), product = S.product;
+  S.mode = 'paused'; S.historyLoading = false; renderTime();
+  $('mapLoading').classList.add('hidden');
+  $('loopStatus').textContent = 'Selecting archived scan…';
+  $('dateGo').disabled = true; $('dateStatus').textContent = 'Finding archived scans…';
+  try {
+    const times = await client.history(product, end);
+    if (revision !== S.revision || product !== S.product) return;
+    const selected = times.filter(time => Date.parse(time) <= Date.parse(end)).at(-1);
+    if (!selected) throw Error('No scans are available in the three hours ending at this date and time.');
+    S.windowEnd = end; S.playEnd = null; S.times = times; scrubTarget = selected;
+    $('dateStatus').textContent = 'Loading ' + selected.slice(0, 10) + ' ' + selected.slice(11, 19) + ' UTC…';
+    const imageRevision = S.revision + 1;
+    const shown = await fetchImage(false, selected);
+    if (S.revision !== imageRevision) return;
+    if (shown) {
+      $('dateStatus').textContent = 'Showing ' + selected.slice(0, 10) + ' ' + selected.slice(11, 19) + ' UTC (nearest prior scan).';
+      closePanel();
+    } else { Object.assign(S, previous); scrubTarget = null; renderTime(); }
+  } catch (error) { if (revision === S.revision) $('dateStatus').textContent = error.message; }
+  finally { $('dateGo').disabled = false; }
+}
+function shiftDay(delta) {
+  try {
+    const time = requestedDate();
+    const moved = new Date(Date.parse(time) + delta * 86400000);
+    if (moved.getTime() > Date.now()) throw Error('Choose a time in the past.');
+    fillDateFields(moved.toISOString()); goToDate();
+  } catch (error) { $('dateStatus').textContent = error.message; }
+}
+function goLive() {
+  S.windowEnd = null; S.playEnd = null; S.historyLoading = false;
+  S.mode = 'live'; scrubTarget = null; $('dateStatus').textContent = ''; fetchImage(true);
+}
 function stepTime(delta) {
   if (!S.times.length) return;
   pause(); scrubTarget = null;
@@ -1507,10 +1956,11 @@ async function loadLoop(refresh = false) {
   let completed = 0, failed = 0, next = 0;
   if (!refresh) $('animLoading').classList.add('show');
   try {
-    const times = await client.catalog(product, refresh);
+    const times = await client.catalog(product, refresh, S.windowEnd);
     if (!active()) return;
     S.times = times;
-    const wanted = times.slice(-FRAME_LIMIT).reverse();
+    const wanted = times.filter(time => !S.playEnd || time <= S.playEnd).slice(-FRAME_LIMIT).reverse();
+    if (!wanted.length) throw Error('No scans are available for this playback window');
     const publish = () => {
       if (!active()) return;
       $('animProgress').textContent = `${completed}/${wanted.length} scans loaded`;
@@ -1551,6 +2001,7 @@ async function loadLoop(refresh = false) {
 function toggleLivePause() {
   if (S.mode === 'playing') { pause(); $('loopStatus').textContent = 'Paused'; }
   else {
+    S.playEnd = S.mode === 'live' ? null : S.selected;
     stopWork(); scrubTarget = null; S.mode = 'playing'; S.loop = [];
     $('mapError').classList.remove('show'); renderTime(); loadLoop();
   }
@@ -1567,7 +2018,7 @@ function changeZoom(delta) {
   const zoom = Math.max(3, Math.min(12, S.zoom + delta));
   if (zoom !== S.zoom) { S.zoom = zoom; viewChanged(); }
 }
-function openPanel() { $('sidePanel').classList.add('open'); $('backdrop').classList.add('show'); }
+function openPanel() { fillDateFields(); $('sidePanel').classList.add('open'); $('backdrop').classList.add('show'); }
 function closePanel() { $('sidePanel').classList.remove('open'); $('backdrop').classList.remove('show'); }
 function updateUserMarker(lat, lon) {
   if (userMarker) userMarker.setLatLng([lat, lon]);
@@ -1593,7 +2044,7 @@ function locateUser({startup = false} = {}) {
     if (revision !== S.revision || $('mapContainer').classList.contains('dragging')) return;
     S.lat = Math.max(-80, Math.min(80, latitude)); S.lon = longitude;
     if (!startup) S.zoom = 7;
-    S.mode = 'live'; viewChanged();
+    S.windowEnd = null; S.playEnd = null; S.mode = 'live'; viewChanged();
   }, () => {
     if (!startup && revision === S.revision)
       $('loopStatus').textContent = 'Location unavailable · use the map to choose an area';
@@ -1656,7 +2107,7 @@ async function init() {
   const badge = () => { $('productBadge').textContent = PRODUCTS.find(p => p.id === S.product).name + ' · CONUS'; };
   $('productSelect').onchange = () => {
     S.product = $('productSelect').value; S.times = []; S.selected = null; scrubTarget = null;
-    S.mode = 'live'; badge(); fetchLegend(); viewChanged();
+    S.mode = S.windowEnd ? 'paused' : 'live'; badge(); fetchLegend(); viewChanged();
   };
   $('baseMapSelect').value = S.basemap;
   $('baseMapSelect').onchange = () => {
@@ -1666,13 +2117,14 @@ async function init() {
   $('opacitySlider').oninput = () => { if (radarOverlay) radarOverlay.setOpacity(+$('opacitySlider').value / 100); };
   $('zoomSlider').value = S.zoom;
   $('zoomSlider').onchange = () => { S.zoom = +$('zoomSlider').value; viewChanged(); };
-  $('timeSlider').oninput = () => {
-    const index = +$('timeSlider').value;
-    pause(); scrubTarget = S.times[index]; renderTime();
+  $('timeSlider').oninput = previewSlider;
+  $('timeSlider').onchange = commitSlider;
+  $('timeSlider').onkeydown = event => {
+    const steps = {ArrowLeft: 1, ArrowDown: 1, ArrowRight: -1, ArrowUp: -1};
+    if (Object.hasOwn(steps, event.key)) { event.preventDefault(); stepTime(steps[event.key]); }
   };
-  $('timeSlider').onchange = () => { fetchImage(false, scrubTarget || S.selected); };
   document.addEventListener('keydown', event => {
-    if (event.target.matches('input,select,textarea')) return;
+    if (event.target.matches('input,select,textarea,button')) return;
     if (event.key === 'Escape') closePanel();
     if (event.key === '+' || event.key === '=') changeZoom(1);
     if (event.key === '-') changeZoom(-1);
@@ -1686,14 +2138,16 @@ async function init() {
   setInterval(() => {
     if (document.hidden || S.updating !== null) return;
     if (S.mode === 'live') fetchImage(true);
-    if (S.mode === 'playing') loadLoop(true);
+    if (S.mode === 'playing' && !S.windowEnd && !S.playEnd) loadLoop(true);
   }, REFRESH_MS);
-  bindGestures(); badge(); fetchLegend(); renderTime();
+  $('dateForm').onsubmit = event => { event.preventDefault(); goToDate(); };
+  fillDateFields(); bindGestures(); badge(); fetchLegend(); renderTime();
   const firstImage = fetchImage();
   locateUser({startup: true});
   await firstImage;
 }
 init().catch(showError);
+
 
 </script>
 </body>

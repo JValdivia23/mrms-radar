@@ -177,3 +177,138 @@ test('pausing during loop loading prevents late playback and further history req
   assert.equal(h.run('S.mode'), 'paused'); assert.equal(h.run('S.timer'), null);
   assert.equal(h.run('S.loop.length'), 0);
 });
+test('three-hour windows span midnight and avoid duplicate GIS/archive cycles', () => {
+  const h = harness();
+  assert.deepEqual([...h.run(`historyTimes(['2026-11-02T21:59:59.000Z', '2026-11-02T22:00:00.000Z',
+    '2026-11-03T00:30:12.000Z', '2026-11-03T01:00:01.000Z'], Date.parse('2026-11-03T01:00:00Z'))`)],
+    ['2026-11-02T22:00:00.000Z', '2026-11-03T00:30:12.000Z']);
+  assert.deepEqual([...h.run(`mergeRecentTimes(['2026-11-03T00:30:42.000Z'],
+    ['2026-11-03T00:30:40.000Z', '2026-11-02T23:00:04.000Z'], Date.parse('2026-11-03T01:00:00Z'))`)],
+    ['2026-11-02T23:00:04.000Z', '2026-11-03T00:30:42.000Z']);
+});
+test('slider positions measure elapsed time rather than the number of scans', () => {
+  const h = harness();
+  h.run(`S.windowEnd='2026-11-03T01:00:00.000Z'; S.times=['2026-11-02T22:00:10.000Z',
+    '2026-11-03T00:00:00.000Z','2026-11-03T00:58:42.000Z']; S.selected=S.times[1]; renderTime();`);
+  assert.equal(h.element('timeSlider').max, 10800);
+  assert.equal(h.element('timeSlider').value, 7200);
+  assert.equal(h.element('timeOffset').textContent, '1 h before 01:00 UTC');
+  assert.equal(h.run('sliderTime(7200)'), '2026-11-03T00:00:00.000Z');
+  assert.equal(h.element('labelStart').textContent, '−3 h');
+});
+test('archive discovery requests both UTC days and only returns observations inside the window', async () => {
+  const h = harness(); const days = [];
+  h.context.records = day => {
+    days.push(day);
+    return day === '2026-11-02'
+      ? [{time:'2026-11-02T21:58:00.000Z'}, {time:'2026-11-02T23:58:07.000Z'}]
+      : [{time:'2026-11-03T00:00:13.000Z'}, {time:'2026-11-03T01:02:00.000Z'}];
+  };
+  h.run('client.day = async (product, day) => window.records(day)');
+  const times = await h.run("client.history('conus_bref_qcd','2026-11-03T01:00:00.000Z')");
+  assert.deepEqual(days, ['2026-11-02','2026-11-03']);
+  assert.deepEqual([...times], ['2026-11-02T23:58:07.000Z','2026-11-03T00:00:13.000Z']);
+});
+test('older scans use public archive objects while recent scans keep the fast PNG path', async () => {
+  const calls = [], h = harness(async url => {calls.push(url); return new Response(png());});
+  h.run(`client.catalogs.set('${product}', {times:['${stamp}']});
+    client.archiveObjects.set('${product}|${stamp}', {time:'${stamp}',key:'recent.grib2.gz'});
+    client.archiveObjects.set('${product}|2026-11-01T12:00:04.000Z', {time:'2026-11-01T12:00:04.000Z',key:'old.grib2.gz'});
+    decodeArchive = async blob => blob;`);
+  const recent = await h.run(`client.frame('${product}','${stamp}',${JSON.stringify(bbox)})`);
+  const old = await h.run(`client.frame('${product}','2026-11-01T12:00:04.000Z',${JSON.stringify(bbox)})`);
+  assert.equal(recent.source, 'wms'); assert.equal(old.source, 'archive');
+  assert.equal(new URL(calls[0]).hostname, 'opengeo.ncep.noaa.gov');
+  assert.equal(calls[1], 'https://noaa-mrms-pds.s3.amazonaws.com/old.grib2.gz');
+});
+test('UTC date input rejects invalid and future dates', () => {
+  const h = harness();
+  h.context.Date = class extends Date {static now() {return Date.parse('2026-11-02T18:00:00Z');}};
+  h.element('goDate').value='2026-11-01'; h.element('goTime').value='15:30';
+  assert.equal(h.run('requestedDate()'), '2026-11-01T15:30:00.000Z');
+  h.element('goDate').value='2026-11-03'; assert.throws(() => h.run('requestedDate()'), /past/);
+  h.element('goDate').value='2026-02-30'; assert.throws(() => h.run('requestedDate()'), /valid/);
+});
+test('missing historical data preserves the displayed scan and reports a useful message', async () => {
+  const h = harness();
+  h.element('goDate').value='2026-11-01'; h.element('goTime').value='15:30';
+  h.run(`S.selected='${stamp}'; client.history=async()=>[];`);
+  await h.run('goToDate()');
+  assert.equal(h.run('S.selected'), stamp); assert.equal(h.run('S.windowEnd'), null);
+  assert.match(h.element('dateStatus').textContent, /No scans are available/);
+  assert.equal(h.element('dateGo').disabled, false);
+});
+test('date navigation selects a real prior observation and fixes the historical playback window', async () => {
+  const h = harness();
+  h.element('goDate').value='2026-11-01'; h.element('goTime').value='15:30';
+  h.run(`client.history=async()=>['2026-11-01T15:26:04.000Z','2026-11-01T15:28:40.000Z'];
+    fetchImage=async(force,time)=>{S.revision++;window.requested=time;return true;};`);
+  await h.run('goToDate()');
+  assert.equal(h.run('S.windowEnd'), '2026-11-01T15:30:00.000Z');
+  assert.equal(h.context.requested, '2026-11-01T15:28:40.000Z');
+  assert.equal(h.run('S.mode'), 'paused');
+  assert.match(h.element('dateStatus').textContent, /Showing 2026-11-01 15:28:40 UTC/);
+  h.run('goLive()'); assert.equal(h.run('S.windowEnd'), null);
+});
+test('a failed archived image restores the previous timeline and reports its error', async () => {
+  const h = harness();
+  h.element('goDate').value='2026-11-01'; h.element('goTime').value='15:30';
+  h.run(`S.selected='${stamp}'; S.times=['${stamp}'];
+    client.history=async()=>['2026-11-01T15:28:40.000Z'];
+    client.frame=async()=>{throw Error('Unsupported archive packing');};`);
+  await h.run('goToDate()');
+  assert.equal(h.run('S.selected'), stamp); assert.equal(h.run('S.windowEnd'), null);
+  assert.deepEqual([...h.run('S.times')], [stamp]);
+  assert.match(h.element('dateStatus').textContent, /Unsupported archive packing/);
+});
+
+function timeJumpHarness() {
+  const h = harness();
+  h.context.Date = class extends Date {static now() {return Date.parse('2026-11-02T18:30:00Z');}};
+  h.run(`S.selected='2026-11-02T18:28:40.000Z';
+    S.times=['2026-11-02T16:32:40.000Z', S.selected];
+    client.catalog=async()=>['2026-11-02T16:32:40.000Z','2026-11-02T18:28:40.000Z'];
+    client.history=async()=>['2026-11-02T15:30:07.000Z','2026-11-02T16:28:41.000Z'];
+    client.frame=async(product,time)=>{window.fetchedTime=time;return {time};};
+    displayFrame=frame=>{S.selected=frame.time;renderTime();};`);
+  return h;
+}
+test('hour jumps leave live/playback mode and fetch older scans before background discovery finishes', async () => {
+  for (const mode of ['live','playing']) for (const hours of [2,3]) {
+    const h = timeJumpHarness(); h.run(`S.mode='${mode}'`);
+    assert.equal(await h.run(`jumpHours(${hours})`), true);
+    const expected = hours === 2 ? '2026-11-02T16:28:41.000Z' : '2026-11-02T15:30:07.000Z';
+    assert.equal(h.context.fetchedTime, expected);
+    assert.equal(h.run('S.selected'), expected); assert.equal(h.run('S.mode'),'paused');
+  }
+});
+test('previewing the range does not rewrite its native value, and releasing it fetches that time', async () => {
+  const h = timeJumpHarness(); let value=3600, writes=0;
+  Object.defineProperty(h.element('timeSlider'),'value',{get:()=>value,set:n=>{value=n;writes++;}});
+  h.run('previewSlider()');
+  assert.equal(writes,0); assert.equal(value,3600);
+  assert.equal(h.run('scrubTarget'),'2026-11-02T16:30:00.000Z');
+  assert.equal(await h.run('commitSlider()'), true);
+  assert.equal(h.context.fetchedTime,'2026-11-02T16:28:41.000Z');
+});
+test('a range change without an input event still requests the thumb position rather than the current frame', async () => {
+  const h = timeJumpHarness(); h.element('timeSlider').value=0;
+  assert.equal(await h.run('commitSlider()'), true);
+  assert.equal(h.context.fetchedTime,'2026-11-02T15:30:07.000Z');
+});
+test('missing hour-jump data reports an error instead of silently clamping to the recent feed', async () => {
+  const h = timeJumpHarness(); h.run('client.history=async()=>[];radarOverlay={};');
+  assert.equal(await h.run('jumpHours(3)'), false);
+  assert.equal(h.context.fetchedTime,undefined);
+  assert.equal(h.run('S.selected'),'2026-11-02T18:28:40.000Z');
+  assert.equal(h.run('scrubTarget'),null);
+  assert.match(h.element('loopStatus').textContent,/No scan is available near the selected time/);
+});
+test('hour jumps in a dated window stay relative to that date', async () => {
+  const h = timeJumpHarness();
+  h.run(`S.windowEnd='2026-11-01T18:00:00.000Z';
+    client.history=async()=>['2026-11-01T15:58:39.000Z','2026-11-01T17:58:40.000Z'];`);
+  assert.equal(await h.run('jumpHours(2)'), true);
+  assert.equal(h.context.fetchedTime,'2026-11-01T15:58:39.000Z');
+  assert.equal(h.run('S.windowEnd'),'2026-11-01T18:00:00.000Z');
+});
