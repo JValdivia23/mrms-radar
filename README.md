@@ -110,8 +110,8 @@ The new [direct NOAA WMS experiment](standalone/noaa_wms/README.md) runs from a
 single [HTML file](standalone/noaa_wms/index.html), with its map assets embedded.
 It retrieves base/composite reflectivity PNGs and real scan timestamps directly
 from NOAA, without Google authorization or a proxy. It includes historical
-scrubbing, animation, image caching, and request timing. This experiment covers
-the contiguous U.S.; the broader product catalog remains in `pure_js`.
+scrubbing, animation, image caching, and compact playback controls. This
+experiment covers the contiguous U.S.; the broader product catalog remains in `pure_js`.
 Its three-hour slider shows elapsed time, and the menu's UTC date/time picker
 opens earlier days using NOAA's public archive. Older images are decoded in a
 background worker, preserving the fast WMS path for recent observations.

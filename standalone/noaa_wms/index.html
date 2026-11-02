@@ -857,20 +857,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .bottom-bar{
     bottom:max(16px,env(safe-area-inset-bottom));
     left:50%;transform:translateX(-50%);
-    padding:12px 18px;
+    width:min(620px,calc(100vw - 24px));padding:14px 18px;
     display:flex;flex-direction:column;gap:10px;
-    min-width:min(420px,92vw);
+    background:rgba(18,24,32,.92);
+  }
+  .compact-heading{
+    display:grid;grid-template-columns:minmax(0,1fr) auto auto;
+    align-items:center;gap:12px;
   }
 
   /* Current product badge */
   .product-badge{
-    display:flex;align-items:center;gap:8px;
     font-size:12px;color:var(--text-muted);
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
-  .product-badge strong{color:var(--text);font-weight:500}
 
   /* Time */
-  .time-controls{display:flex;align-items:center;gap:10px}
+  .time-controls{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:12px;row-gap:2px}
+  .playback-controls{display:flex;align-items:center;gap:5px}
   .time-nav{
     width:34px;height:34px;border-radius:50%;border:1px solid var(--panel-border);
     background:rgba(255,255,255,.05);color:var(--text);
@@ -879,27 +883,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
     transition:background .15s;
   }
   .time-nav:hover{background:rgba(255,255,255,.1)}
+  .time-nav svg{width:14px;height:14px;fill:currentColor;pointer-events:none}
+  .time-nav .pause-icon,.time-nav.is-playing .play-icon{display:none}
+  .time-nav.is-playing .pause-icon{display:block}
+  #livePauseBtn{width:36px;height:36px}
   .time-nav.now-btn{width:auto;padding:0 12px;border-radius:16px;font-size:11px;font-weight:700}
 
   .time-display{
-    text-align:center;font-size:28px;font-weight:300;letter-spacing:-.5px;
+    font-size:18px;font-weight:500;white-space:nowrap;
     font-variant-numeric:tabular-nums;
-    display:flex;align-items:center;justify-content:center;gap:8px;
+    display:flex;align-items:baseline;gap:8px;
   }
-  .time-secondary{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
-  .time-local{font-size:13px;line-height:1.1}
-  .time-date{font-size:10px;line-height:1.1;color:var(--text-muted);letter-spacing:.3px}
-  .live-dot{
-    display:inline-block;width:7px;height:7px;
-    background:var(--danger);border-radius:50%;
-    animation:pulse 2s ease-in-out infinite;
-  }
+  .time-date{font-size:12px;font-weight:400;color:var(--text-muted)}
+  .time-offset{font-size:13px;font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+  .time-offset[data-live="true"]::before{content:'';display:inline-block;width:6px;height:6px;margin-right:6px;background:var(--danger);border-radius:50%;animation:pulse 2s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-  .time-slider-wrap{flex:1;min-width:0}
+  .time-slider-wrap{min-width:0;display:flex;align-items:center;min-height:36px}
+  #timeSlider{margin:0}
   .time-labels{
+    grid-column:2;
     display:flex;justify-content:space-between;
-    font-size:10px;color:var(--text-muted);margin-top:2px;
+    font-size:12px;color:var(--text-muted);
   }
   .time-labels button{
     border:0;background:none;color:inherit;font:inherit;padding:6px 2px;
@@ -907,6 +912,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .time-labels button:hover{color:var(--text);background:rgba(255,255,255,.08)}
   .time-labels button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .time-labels #labelEnd{color:var(--text);font-weight:500}
+  .panel-status{position:absolute;left:0;right:0;bottom:calc(100% + 8px);padding:8px 12px;border:1px solid var(--panel-border);border-radius:10px;background:rgba(18,24,32,.96);font-size:12px;line-height:1.4;color:var(--text-muted)}
+  .panel-status[hidden]{display:none}
+  .panel-status[data-state="error"]{color:#ffb7b0}
+  .panel-status[data-state="warning"]{color:#f2d69b}
 
   /* ── Zoom stack (desktop) ── */
   /* ── Colorbar ── */
@@ -968,8 +978,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   /* ── Responsive ── */
   @media(max-width:640px){
-    .bottom-bar{min-width:auto;left:12px;right:12px;transform:none;padding:10px 14px}
-    .time-display{font-size:22px}
     .side-panel{width:100vw}
     .level-value{font-size:20px}
     .colorbar{right:6px;width:42px;height:270px;top:50%;transform:translateY(-50%)}
@@ -977,7 +985,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   .colorbar{left:50%;right:auto;top:16px;transform:translateX(-50%);width:min(500px,calc(100vw - 130px));height:auto;padding:5px;background:rgba(30,34,40,.9)}
   .colorbar-img{height:auto;display:block;width:100%}
-  .time-display{font-size:24px}
   .map-error{pointer-events:auto}
   .section-label{display:block}
   .date-fields{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;margin:10px 0}
@@ -988,9 +995,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .date-actions button[type=submit]{background:#285d9c}
   .date-actions button:disabled{opacity:.5;cursor:wait}
   .date-status{font-size:11px;line-height:1.5;color:var(--text-muted);margin-top:8px}
-  .time-offset{text-align:center;font-size:13px;font-weight:500;color:var(--text)}
-  .time-range-hint{font-size:10px;color:var(--text-muted);text-align:center}
-  @media(max-width:640px){.colorbar{top:20px;height:auto;width:calc(100vw - 130px)}.time-display{font-size:20px}.map-credit{max-width:calc(100vw - 12px);font-size:9px}}
+  @media(max-width:560px){
+    .bottom-bar{padding:12px 14px;gap:8px}
+    .compact-heading{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+    .product-badge{grid-column:1/-1}
+    .time-display{font-size:17px;flex-wrap:wrap;row-gap:0}
+    .time-offset{max-width:145px;font-size:12px}
+    .time-labels{grid-column:1/-1}
+  }
+  @media(pointer:coarse){
+    .time-nav,#livePauseBtn{width:44px;height:44px}
+    .time-labels{grid-column:1/-1}
+    .time-labels button{min-width:44px;min-height:44px}
+  }
+  @media(max-width:640px){.colorbar{top:20px;height:auto;width:calc(100vw - 130px)}.map-credit{max-width:calc(100vw - 12px);font-size:9px}}
 </style>
 </head>
 <body>
@@ -1086,38 +1104,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <!-- Bottom bar -->
 <div class="floating bottom-bar">
-  <div class="product-badge" id="productBadge">
-    Base reflectivity · CONUS
-  </div>
-
-  <div class="time-display">
-    <span class="live-dot" id="liveDot"></span>
-    <span id="timeDisplay">--:--</span>
-    <span class="time-secondary">
-      <span class="time-local" id="localTimeDisplay" style="display:none"></span>
+  <div class="compact-heading">
+    <span class="product-badge" id="productBadge">Base reflectivity</span>
+    <div class="time-display">
       <span class="time-date" id="dateDisplay"></span>
-    </span>
+      <time id="timeDisplay">--:-- UTC</time>
+    </div>
+    <output id="timeOffset" class="time-offset" for="timeSlider">Live</output>
   </div>
-
-  <div id="requestStatus" style="font-size:11px;color:var(--text-muted);text-align:center"></div>
-  <div id="loopStatus" role="status" style="font-size:11px;opacity:.7;text-align:center"></div>
-  <output id="timeOffset" class="time-offset" for="timeSlider">Recent 3 hours</output>
   <div class="time-controls">
-    <button class="time-nav" onclick="stepTime(1)" title="Previous frame">◀</button>
+    <div class="playback-controls">
+      <button class="time-nav" onclick="stepTime(1)" title="Previous frame" aria-label="Previous scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h2v16H5zm14 0v16L8 12z"/></svg></button>
+      <button class="time-nav" id="livePauseBtn" onclick="toggleLivePause()" title="Play recent scans" aria-label="Play recent scans"><svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3 15 9-15 9z"/></svg><svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg></button>
+      <button class="time-nav" onclick="stepTime(-1)" title="Next frame" aria-label="Next scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 4h2v16h-2zM5 4l11 8-11 8z"/></svg></button>
+    </div>
     <div class="time-slider-wrap">
       <input type="range" min="0" max="10800" step="1" value="10800" id="timeSlider" aria-label="Radar scan time">
-      <div class="time-labels">
-        <button type="button" id="labelStart" onclick="jumpHours(3)" aria-label="Go back 3 hours">−3 h</button>
-        <button type="button" onclick="jumpHours(2)" aria-label="Go back 2 hours">−2 h</button>
-        <button type="button" onclick="jumpHours(1)" aria-label="Go back 1 hour">−1 h</button>
-        <button type="button" id="labelEnd" onclick="jumpHours(0)" aria-label="Go to end of time window">NOW</button>
-      </div>
     </div>
-    <button class="time-nav" onclick="stepTime(-1)" title="Next frame">▶</button>
-    <button class="time-nav now-btn" id="livePauseBtn" onclick="toggleLivePause()">⏸</button>
-    <button class="time-nav now-btn" onclick="goLive()">NOW</button>
+    <div class="time-labels">
+      <button type="button" id="labelStart" onclick="jumpHours(3)" aria-label="Go back 3 hours">−3 h</button>
+      <button type="button" onclick="jumpHours(2)" aria-label="Go back 2 hours">−2 h</button>
+      <button type="button" onclick="jumpHours(1)" aria-label="Go back 1 hour">−1 h</button>
+      <button type="button" id="labelEnd" onclick="goLive()" aria-label="Return to live radar">Now</button>
+    </div>
   </div>
-  <div id="timeRangeHint" class="time-range-hint">Recent 3 hours</div>
+  <div id="loopStatus" class="panel-status" role="status" hidden></div>
 </div>
 
 <!--
@@ -1734,9 +1745,13 @@ function displayFrame(frame) {
   S.selected = frame.time;
   S.frameSource = frame.source || 'wms'; fetchLegend();
   $('mapLoading').classList.add('hidden'); $('mapError').classList.remove('show');
-  $('requestStatus').textContent = frame.cached ? 'From memory' :
-    `${(frame.elapsed / 1000).toFixed(2)} s · ${Math.round(frame.blob.size / 1024)} KB`;
   renderTime();
+}
+function setStatus(message = '', state = 'info') {
+  const status = $('loopStatus');
+  status.textContent = message; status.hidden = !message;
+  status.setAttribute('data-state', state);
+  status.setAttribute('role', state === 'error' ? 'alert' : 'status');
 }
 function windowEndMs() { return S.windowEnd ? Date.parse(S.windowEnd) : Date.now(); }
 function sliderTime(value) {
@@ -1753,7 +1768,6 @@ function previewSlider() {
 }
 async function selectTime(time) {
   pause(); scrubTarget = time;
-  $('loopStatus').textContent = 'Loading selected scan…';
   const request = fetchImage(false, time), revision = S.revision;
   const loaded = await request;
   if (!loaded && revision === S.revision) { scrubTarget = null; renderTime(); }
@@ -1769,17 +1783,21 @@ function jumpHours(hours) {
 }
 function renderTime() {
   const date = S.selected ? new Date(S.selected) : null;
-  $('timeDisplay').textContent = date ? date.toISOString().slice(11, 19) + ' UTC' : '--:-- UTC';
-  $('dateDisplay').textContent = date ? date.toISOString().slice(0, 10) : '';
-  $('localTimeDisplay').textContent = date ? date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', timeZoneName: 'short'}) : '';
-  $('localTimeDisplay').style.display = date ? '' : 'none';
-  $('liveDot').style.display = S.mode === 'live' ? 'inline-block' : 'none';
-  $('livePauseBtn').textContent = S.mode === 'playing' ? '⏸' : '▶';
+  $('timeDisplay').textContent = date ? date.toISOString().slice(11, 16) + ' UTC' : '--:-- UTC';
+  $('timeDisplay').title = S.selected || '';
+  $('timeDisplay').setAttribute('datetime', S.selected || '');
+  $('timeDisplay').setAttribute('aria-label', S.selected || 'No radar scan loaded');
+  $('dateDisplay').textContent = date ? date.toLocaleDateString('en-US', {timeZone: 'UTC', month: 'short', day: 'numeric',
+    ...(date.getUTCFullYear() === new Date().getUTCFullYear() ? {} : {year: 'numeric'})}) : '';
+  $('dateDisplay').title = date ? date.toISOString().slice(0, 10) : '';
+  $('livePauseBtn').classList[S.mode === 'playing' ? 'add' : 'remove']('is-playing');
   $('livePauseBtn').title = S.mode === 'playing' ? 'Pause playback' : 'Play recent scans';
   $('livePauseBtn').setAttribute('aria-label', $('livePauseBtn').title);
   const anchor = windowEndMs(), preview = scrubTarget || S.selected;
   const offset = preview ? Math.max(0, anchor - Date.parse(preview)) : 0;
-  $('timeOffset').textContent = preview ? (S.windowEnd ? elapsedLabel(offset) + ' before ' + new Date(anchor).toISOString().slice(11, 16) + ' UTC' : elapsedLabel(offset) + ' ago') : 'Recent 3 hours';
+  const live = S.mode === 'live' && !scrubTarget && offset <= 10 * 60000;
+  $('timeOffset').textContent = live ? 'Live' : preview ? (S.windowEnd ? elapsedLabel(offset) + ' before ' + new Date(anchor).toISOString().slice(11, 16) + ' UTC' : elapsedLabel(offset) + ' ago') : '—';
+  $('timeOffset').setAttribute('data-live', String(live));
   $('timeSlider').max = HISTORY_MS / 1000;
   if (!previewingTimeSlider)
     $('timeSlider').value = preview ? Math.max(0, Math.min(HISTORY_MS / 1000, (HISTORY_MS - offset) / 1000)) : HISTORY_MS / 1000;
@@ -1787,9 +1805,7 @@ function renderTime() {
   $('timeSlider').setAttribute('aria-valuetext', preview ? $('timeOffset').textContent + ', ' + preview : 'Recent 3 hours');
   $('timeSlider').title = preview ? preview + ' · ' + $('timeOffset').textContent : 'Recent 3 hours';
   $('labelStart').textContent = '−3 h';
-  $('labelEnd').textContent = S.windowEnd ? new Date(anchor).toISOString().slice(11, 16) + ' UTC' : 'NOW';
-  $('timeRangeHint').textContent = S.historyLoading ? 'Loading older scans…' :
-    (S.windowEnd ? 'Archive · ' + utcDay(anchor) : 'Recent 3 hours') + ' · ' + S.times.length + ' scans';
+  $('labelEnd').textContent = 'Now';
 }
 function fetchLegend() {
   const image = $('legendBar');
@@ -1816,13 +1832,14 @@ function stopWork() {
 }
 function pause() {
   stopWork(); S.mode = 'paused'; S.loop = [];
-  $('mapLoading').classList.add('hidden'); renderTime();
+  $('mapLoading').classList.add('hidden'); setStatus(); renderTime();
 }
 function showError(error) {
   $('mapLoading').classList.add('hidden'); $('animLoading').classList.remove('show');
   const message = error.name === 'AbortError' ? 'NOAA request timed out. Try again.' : error.message;
-  if (radarOverlay) $('loopStatus').textContent = message + ' · showing the previous scan';
+  if (radarOverlay) setStatus(message + ' · showing the previous scan', 'error');
   else {
+    setStatus();
     $('mapError').children[1].textContent = message;
     $('mapError').classList.add('show');
   }
@@ -1832,7 +1849,8 @@ async function fetchImage(force = false, requestedTime = null) {
   if (S.mode === 'playing') S.mode = 'paused';
   S.updating = revision;
   const bbox = projectedBounds(S.lat, S.lon, S.zoom);
-  $('mapLoading').classList.remove('hidden'); $('mapError').classList.remove('show');
+  $('mapLoading').classList[radarOverlay ? 'add' : 'remove']('hidden'); $('mapError').classList.remove('show');
+  setStatus(requestedTime ? 'Loading selected scan…' : 'Loading radar…', 'loading');
   renderTime();
   try {
     let times = await client.catalog(product, force, S.windowEnd);
@@ -1858,9 +1876,7 @@ async function fetchImage(force = false, requestedTime = null) {
     if (revision !== S.revision) return;
     scrubTarget = null; displayFrame(frame);
     const age = Date.now() - Date.parse(time);
-    $('loopStatus').textContent = age > 10 * 60000 ? 'Latest scan is ' + Math.floor(age / 60000) + ' min old' :
-      S.mode === 'live' ? 'Live · ' + times.length + ' scans available' : 'Paused';
-    if (S.mode !== 'live') $('loopStatus').textContent = S.windowEnd ? 'Archived scan · ' + utcDay(Date.parse(time)) : 'Paused';
+    setStatus(S.mode === 'live' && age > 10 * 60000 ? 'Latest scan is ' + Math.floor(age / 60000) + ' min old' : '', 'warning');
     if (S.windowEnd) $('dateStatus').textContent = 'Showing ' + time.slice(0, 10) + ' ' + time.slice(11, 19) + ' UTC (nearest prior scan).';
     if (!S.windowEnd) extendHistory(revision, product);
     return true;
@@ -1904,7 +1920,7 @@ async function goToDate() {
   const revision = stopWork(), product = S.product;
   S.mode = 'paused'; S.historyLoading = false; renderTime();
   $('mapLoading').classList.add('hidden');
-  $('loopStatus').textContent = 'Selecting archived scan…';
+  setStatus('Selecting archived scan…', 'loading');
   $('dateGo').disabled = true; $('dateStatus').textContent = 'Finding archived scans…';
   try {
     const times = await client.history(product, end);
@@ -1920,7 +1936,9 @@ async function goToDate() {
       $('dateStatus').textContent = 'Showing ' + selected.slice(0, 10) + ' ' + selected.slice(11, 19) + ' UTC (nearest prior scan).';
       closePanel();
     } else { Object.assign(S, previous); scrubTarget = null; renderTime(); }
-  } catch (error) { if (revision === S.revision) $('dateStatus').textContent = error.message; }
+  } catch (error) {
+    if (revision === S.revision) { $('dateStatus').textContent = error.message; setStatus(); }
+  }
   finally { $('dateGo').disabled = false; }
 }
 function shiftDay(delta) {
@@ -1954,7 +1972,7 @@ async function loadLoop(refresh = false) {
   const active = () => S.revision === revision && S.mode === 'playing';
   const bbox = projectedBounds(S.lat, S.lon, S.zoom), frames = [];
   let completed = 0, failed = 0, next = 0;
-  if (!refresh) $('animLoading').classList.add('show');
+  if (!refresh) { $('animLoading').classList.add('show'); setStatus('Loading radar loop…', 'loading'); }
   try {
     const times = await client.catalog(product, refresh, S.windowEnd);
     if (!active()) return;
@@ -1967,7 +1985,7 @@ async function loadLoop(refresh = false) {
       if (!refresh) {
         S.loop = [...frames].sort((a, b) => a.time.localeCompare(b.time));
         if (!S.timer && S.loop.length >= Math.min(3, wanted.length)) {
-          $('animLoading').classList.remove('show'); tick();
+          $('animLoading').classList.remove('show'); setStatus(); tick();
         }
       }
     };
@@ -1989,17 +2007,16 @@ async function loadLoop(refresh = false) {
     S.loop = frames.sort((a, b) => a.time.localeCompare(b.time));
     if (!S.timer) tick();
     $('animLoading').classList.remove('show');
-    $('loopStatus').textContent = `${S.loop.length} scans · ${S.loop[0].time.slice(11, 16)}–${S.loop.at(-1).time.slice(11, 16)} UTC` +
-      (failed ? ` · ${failed} failed` : '');
+    setStatus(failed ? `${failed} scans could not load; playing available scans` : '', 'warning');
   } catch (error) {
     if (active()) {
-      if (refresh && S.loop.length) $('loopStatus').textContent = 'Update unavailable · playing cached scans';
+      if (refresh && S.loop.length) setStatus('Update unavailable · playing previous scans', 'warning');
       else { pause(); showError(error); }
     }
   } finally { if (S.updating === revision) S.updating = null; }
 }
 function toggleLivePause() {
-  if (S.mode === 'playing') { pause(); $('loopStatus').textContent = 'Paused'; }
+  if (S.mode === 'playing') pause();
   else {
     S.playEnd = S.mode === 'live' ? null : S.selected;
     stopWork(); scrubTarget = null; S.mode = 'playing'; S.loop = [];
@@ -2009,8 +2026,7 @@ function toggleLivePause() {
 function viewChanged() {
   const wasPlaying = S.mode === 'playing';
   stopWork(); clearOverlay(); syncMap(); saveSettings();
-  $('requestStatus').textContent = '';
-  $('loopStatus').textContent = 'Loading radar…';
+  setStatus('Loading radar…', 'loading');
   if (wasPlaying) { S.loop = []; loadLoop(); }
   else fetchImage();
 }
@@ -2032,11 +2048,11 @@ function updateUserMarker(lat, lon) {
 }
 function locateUser({startup = false} = {}) {
   if (!navigator.geolocation) {
-    if (!startup) $('loopStatus').textContent = 'Location is unavailable in this browser';
+    if (!startup) setStatus('Location is unavailable in this browser', 'warning');
     return;
   }
   const revision = S.revision;
-  if (!startup) $('loopStatus').textContent = 'Finding your location…';
+  if (!startup) setStatus('Finding your location…', 'loading');
   navigator.geolocation.getCurrentPosition(position => {
     const {latitude, longitude} = position.coords;
     updateUserMarker(latitude, longitude);
@@ -2047,7 +2063,7 @@ function locateUser({startup = false} = {}) {
     S.windowEnd = null; S.playEnd = null; S.mode = 'live'; viewChanged();
   }, () => {
     if (!startup && revision === S.revision)
-      $('loopStatus').textContent = 'Location unavailable · use the map to choose an area';
+      setStatus('Location unavailable · use the map to choose an area', 'warning');
   },
   {timeout: 5000, maximumAge: 600000});
 }
@@ -2104,7 +2120,7 @@ async function init() {
   baseLayer().addTo(leafletMap); scaleMap();
   $('productSelect').innerHTML = PRODUCTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   $('productSelect').value = S.product;
-  const badge = () => { $('productBadge').textContent = PRODUCTS.find(p => p.id === S.product).name + ' · CONUS'; };
+  const badge = () => { $('productBadge').textContent = PRODUCTS.find(p => p.id === S.product).name; };
   $('productSelect').onchange = () => {
     S.product = $('productSelect').value; S.times = []; S.selected = null; scrubTarget = null;
     S.mode = S.windowEnd ? 'paused' : 'live'; badge(); fetchLegend(); viewChanged();

@@ -67,6 +67,14 @@ It remains a single HTML file with no backend or extra downloads of decoder code
 
 ## Controls and performance
 
+- **Compact controls** keep the product name, a single UTC timestamp/date, and
+  the relative time together in the header. Previous/play/next controls sit
+  beside the slider, with hour jumps and a single Now action below. Product
+  selection and Go to date stay in the menu. Exact scan seconds and the full
+  date remain available through the timestamp tooltip and accessible labels.
+  Loading, stale-data warnings, and errors appear above the bar only when
+  relevant; cache messages, transfer timing, scan counts, and permanent
+  paused/archive status rows are omitted.
 - **Play** loops the newest 18 advertised scans, or scans ending at a paused
   selection, and starts once three images
   have loaded (or fewer if the service offers fewer scans). Pausing retains the
@@ -75,7 +83,9 @@ It remains a single HTML file with no backend or extra downloads of decoder code
   on its selected date rather than refreshing back to the present.
 - **NOW** returns to the latest advertised scan. Live view and playing loops
   check for new scans every 30 seconds while the page is visible. Published
-  cadence and retained history are controlled by NOAA.
+  cadence and retained history are controlled by NOAA. The same Now button
+  returns to live radar from a fixed historical window; the slider's far-right
+  position still selects the end of that historical window.
 - **Slider** has a fixed three-hour elapsed-time scale (−3 h, −2 h, −1 h,
   NOW), with a live `time ago` readout. Positions reflect elapsed seconds rather
   than the number of available scans. Dragging previews the selected scan's
@@ -87,7 +97,7 @@ It remains a single HTML file with no backend or extra downloads of decoder code
   image. The displayed image timestamp changes only once a new image has loaded.
 - **Go to date** in the menu accepts a UTC date and time, plus previous/next-day
   buttons. It opens the nearest available prior observation and a three-hour
-  window ending at the requested time. The full UTC date is always displayed;
+  window ending at the requested time. The UTC date stays beside the time;
   the offset is relative to that window's end. NOW exits this fixed historical
   window. Future/invalid dates and missing dates show explicit messages.
 - **Pan/zoom** select the image viewport. The basemap picker and radar-opacity
@@ -98,9 +108,6 @@ It remains a single HTML file with no backend or extra downloads of decoder code
   location and recenters the map. Denying location leaves radar fully usable.
 - **Keyboard:** Space plays/pauses, left/right arrows step scans, `+`/`-` zoom,
   Escape closes settings, and `0` requests location.
-- The small timing label reports the PNG's fetch/decode time, including any
-  request-queue wait, and its size. It excludes initial service discovery and
-  legend loading. `From memory` means the exact image was reused from cache.
 
 At most three PNG requests run concurrently. Exact requests and in-flight work
 are shared; the memory cache holds at most 72 images or 32 MiB. Refreshing a
