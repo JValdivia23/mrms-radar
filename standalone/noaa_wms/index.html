@@ -1045,7 +1045,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div>
     <label class="section-label" for="productSelect">Product</label>
     <select id="productSelect" aria-label="Radar product"></select>
-    <p style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.5">Contiguous U.S. radar, directly from NOAA.</p>
+    <div id="heightControls" hidden style="margin-top:14px">
+      <label class="section-label" for="heightSelect">Height · above sea level</label>
+      <select id="heightSelect" aria-label="Radar height above sea level"></select>
+    </div>
+    <p id="productHelp" style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.5">Contiguous U.S. radar, directly from NOAA.</p>
   </div>
 
   <form id="dateForm">
@@ -1238,9 +1242,23 @@ window.MRMSNaturalEarth = {
 
 const $ = id => document.getElementById(id);
 const PRODUCTS = [
-  {id: 'conus_bref_qcd', name: 'Base reflectivity', archive: 'MergedBaseReflectivityQC_00.50', category: 11},
-  {id: 'conus_cref_qcd', name: 'Composite reflectivity', archive: 'MergedReflectivityQCComposite_00.50', category: 10},
+  {id: 'conus_bref_qcd', name: 'Base reflectivity', archive: 'MergedBaseReflectivityQC_00.50', category: 11, parameter: 0, heightMeters: 500, scale: 'reflectivity'},
+  {id: 'conus_cref_qcd', name: 'Composite reflectivity', archive: 'MergedReflectivityQCComposite_00.50', category: 10, parameter: 0, heightMeters: 500, scale: 'reflectivity'},
+  {id: 'zdr', name: 'ZDR · Differential reflectivity', short: 'ZDR', archive: 'MergedZdr', category: 9, parameter: 4, scale: 'zdr', levels: true},
+  {id: 'rhohv', name: 'ρHV · Correlation coefficient', short: 'ρHV', archive: 'MergedRhoHV', category: 9, parameter: 3, scale: 'rhohv', levels: true},
 ];
+const HEIGHTS = ['00.50','00.75','01.00','01.25','01.50','01.75','02.00','02.25','02.50','02.75',
+  '03.00','03.50','04.00','04.50','05.00','05.50','06.00','06.50','07.00','07.50','08.00',
+  '08.50','09.00','10.00','11.00','12.00','13.00','14.00','15.00','16.00','17.00','18.00','19.00'];
+function productInfo(key) {
+  const direct = PRODUCTS.find(p => p.id === key && !p.levels);
+  if (direct) return direct;
+  const match = /^(zdr|rhohv)_(\d{2}\.\d{2})$/.exec(key);
+  if (!match || !HEIGHTS.includes(match[2])) throw Error('Unknown radar product or height');
+  const family = PRODUCTS.find(p => p.id === match[1]);
+  return {...family, id: key, family: family.id, archive: family.archive + '_' + match[2],
+    height: match[2], heightMeters: Number(match[2]) * 1000};
+}
 const IMAGE_WIDTH = 920, IMAGE_HEIGHT = 630;
 const FRAME_LIMIT = 18, REFRESH_MS = 30000;
 const WMS_ROOT = 'https://opengeo.ncep.noaa.gov/geoserver/conus/';
@@ -1251,6 +1269,22 @@ const ARCHIVE_PALETTE = [[221,254,255],[216,210,233],[208,175,212],[163,127,167]
   [115,74,119],[214,212,173],[169,168,125],[119,119,119],[0,236,236],[1,160,246],
   [0,0,246],[0,255,0],[0,200,0],[0,144,0],[255,255,0],[231,192,0],[255,144,0],
   [255,0,0],[220,0,0],[192,0,0],[255,0,255],[153,85,201]];
+// NOAA/NSSL viewer legends, ordered low to high. Nonuniform dual-pol bins
+// preserve detail near zero ZDR and near-unity correlation coefficient.
+const ARCHIVE_SCALES = {
+  reflectivity: {bounds: Array.from({length: 23}, (_, i) => -35 + i * 5), colors: ARCHIVE_PALETTE,
+    ticks: [1,3,5,7,9,11,13,15,17,19,21], units: 'dBZ', minimum: -35},
+  zdr: {bounds: [-4,-2,-0.5,0,0.3,0.6,1,1.5,2,2.5,3,4,5,6,8,20],
+    colors: [[64,64,64],[156,156,156],[201,201,201],[140,120,180],[0,0,152],
+      [35,152,211],[68,255,210],[87,219,86],[255,255,96],[255,144,69],[218,0,0],
+      [173,0,0],[247,130,190],[255,255,255],[119,0,125]],
+    ticks: [0,2,4,6,8,10,12,14,15], units: 'dB'},
+  rhohv: {bounds: [0.20,0.45,0.65,0.75,0.80,0.85,0.90,0.93,0.95,0.96,0.97,0.98,0.99,1,1.05,3],
+    colors: [[149,148,156],[22,20,140],[9,2,233],[137,135,214],[92,255,89],
+      [139,207,2],[255,251,0],[255,196,0],[255,137,3],[255,43,0],[227,0,0],
+      [161,0,0],[121,0,90],[250,172,209],[119,0,125]],
+    ticks: [0,2,4,6,8,10,13,14], units: 'unitless', minimum: 0},
+};
 
 // Source-specific MRMS GRIB2/PNG decoder. Runs in a disposable worker so the
 // 7000x3500 source never blocks map controls or becomes a full RGBA texture.
@@ -1317,12 +1351,13 @@ function archiveWorker() {
         'Unsupported archive map grid');
       const product = section(4, 34);
       require(product.getUint16(5) === 0 && product.getUint16(7) === 0 &&
-        product.getUint8(9) === job.category && product.getUint8(10) === 0 &&
-        product.getUint8(22) === 102 && product.getUint8(23) === 0 && product.getUint32(24) === 500,
-        'Archive product does not match the selected reflectivity');
+        product.getUint8(9) === job.category && product.getUint8(10) === job.parameter &&
+        product.getUint8(22) === 102 && product.getUint8(23) === 0 && product.getUint32(24) === job.heightMeters,
+        'Archive product or height does not match the selection');
       const packing = section(5, 21);
+      const bits = packing.getUint8(19), bytesPerPixel = bits === 24 ? 3 : 2;
       require(packing.getUint32(5) === width * height && packing.getUint16(9) === 41 &&
-        packing.getUint8(19) === 16 && packing.getUint8(20) === 0, 'Unsupported archive packing');
+        [16,24].includes(bits) && packing.getUint8(20) === 0, 'Unsupported archive packing');
       const signed = n => n & 0x8000 ? -(n & 0x7fff) : n;
       const reference = packing.getFloat32(11), binary = signed(packing.getUint16(15)), decimal = signed(packing.getUint16(17));
       require(Number.isFinite(reference) && Math.abs(binary) <= 32 && Math.abs(decimal) <= 32, 'Invalid archive value scale');
@@ -1342,7 +1377,8 @@ function archiveWorker() {
         if (kind === 'IHDR') {
           require(!seenHeader && position === 8 && length === 13 &&
             pngView.getUint32(position + 8) === width && pngView.getUint32(position + 12) === height &&
-            body[8] === 16 && body[9] === 0 && body[10] === 0 && body[11] === 0 && body[12] === 0,
+            body[8] === (bits === 24 ? 8 : 16) && body[9] === (bits === 24 ? 2 : 0) &&
+            body[10] === 0 && body[11] === 0 && body[12] === 0,
             'Unsupported archive PNG profile');
           seenHeader = true;
         } else if (kind === 'IDAT') {
@@ -1356,7 +1392,7 @@ function archiveWorker() {
       require(seenEnd && position === png.length, 'Incomplete archive PNG');
       const compressed = new Uint8Array(total); let copied = 0;
       for (const chunk of chunks) { compressed.set(chunk, copied); copied += chunk.length; }
-      const stride = width * 2, raw = await inflate(compressed, 'deflate', (stride + 1) * height);
+      const stride = width * bytesPerPixel, raw = await inflate(compressed, 'deflate', (stride + 1) * height);
       require(raw.length === (stride + 1) * height, 'Invalid archive raster size');
       const [west, south, east, north] = job.bbox, radius = 6378137, degrees = 180 / Math.PI;
       const columns = Array.from({length: job.width}, (_, x) =>
@@ -1368,28 +1404,36 @@ function archiveWorker() {
         if (row >= 0 && row < height) { if (!rows.has(row)) rows.set(row, []); rows.get(row).push(y); }
       }
       const rgba = new Uint8ClampedArray(job.width * job.height * 4);
-      // Precompute all 16-bit sample colors; missing/no-coverage stay transparent.
-      const lookup = new Uint8ClampedArray(65536 * 4);
-      for (let sample = 0; sample < 65536; sample++) {
-        const dbz = (reference + sample * 2 ** binary) / 10 ** decimal;
-        if (dbz === -99 || dbz === -999 || dbz < -35) continue;
-        const color = job.palette[Math.max(0, Math.min(job.palette.length - 1, Math.floor((dbz + 35) / 5)))];
-        lookup.set([...color, 255], sample * 4);
+      const {bounds, colors, minimum = -Infinity} = job.scale;
+      function colorFor(sample) {
+        const value = (reference + sample * 2 ** binary) / 10 ** decimal;
+        if (value === -99 || value === -999 || value < minimum) return null;
+        let bin = 0;
+        while (bin < colors.length - 1 && value >= bounds[bin + 1]) bin++;
+        return colors[bin];
       }
+      // A sparse table covers observed samples in either packing format without
+      // allocating a 16-million-entry RGB lookup for 24-bit correlation data.
+      const lookup = new Map();
       let previous = new Uint8Array(stride), current = new Uint8Array(stride);
       for (let row = 0; row < height; row++) {
         const start = row * (stride + 1), filter = raw[start];
         require(filter <= 4, 'Unsupported archive PNG row filter');
         for (let x = 0; x < stride; x++) {
-          const left = x >= 2 ? current[x - 2] : 0, up = previous[x], corner = x >= 2 ? previous[x - 2] : 0;
+          const left = x >= bytesPerPixel ? current[x - bytesPerPixel] : 0, up = previous[x],
+            corner = x >= bytesPerPixel ? previous[x - bytesPerPixel] : 0;
           current[x] = raw[start + x + 1] + (filter === 0 ? 0 : filter === 1 ? left : filter === 2 ? up :
             filter === 3 ? Math.floor((left + up) / 2) : paeth(left, up, corner));
         }
         for (const y of rows.get(row) || []) for (let x = 0; x < job.width; x++) {
           const column = columns[x];
           if (column < 0 || column >= width) continue;
-          const sample = current[column * 2] * 256 + current[column * 2 + 1], at = (y * job.width + x) * 4;
-          rgba.set(lookup.subarray(sample * 4, sample * 4 + 4), at);
+          const index = column * bytesPerPixel, at = (y * job.width + x) * 4;
+          const sample = bits === 24 ? current[index] * 65536 + current[index + 1] * 256 + current[index + 2]
+            : current[index] * 256 + current[index + 1];
+          if (!lookup.has(sample)) lookup.set(sample, colorFor(sample));
+          const color = lookup.get(sample);
+          if (color) { rgba[at] = color[0]; rgba[at + 1] = color[1]; rgba[at + 2] = color[2]; rgba[at + 3] = 255; }
         }
         [previous, current] = [current, previous];
       }
@@ -1421,12 +1465,13 @@ function elapsedLabel(milliseconds) {
   if (minutes < 1) return 'less than 1 min';
   return [Math.floor(minutes / 60) ? Math.floor(minutes / 60) + ' h' : '', minutes % 60 ? minutes % 60 + ' min' : ''].filter(Boolean).join(' ');
 }
+function scanTolerance(product) { return (productInfo(product).levels ? 6 : 3) * 60000; }
 function parseArchivePage(xml, product, day) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagNameNS('*', 'parsererror').length || doc.documentElement.localName !== 'ListBucketResult')
     throw Error('Invalid NOAA archive listing');
   const value = (element, name) => [...element.children].find(child => child.localName === name)?.textContent.trim();
-  const name = PRODUCTS.find(p => p.id === product).archive, digits = day.replaceAll('-', '');
+  const name = productInfo(product).archive, digits = day.replaceAll('-', '');
   const prefix = `CONUS/${name}/${digits}/MRMS_${name}_`;
   const records = [];
   for (const element of doc.getElementsByTagNameNS('*', 'Contents')) {
@@ -1459,8 +1504,9 @@ async function decodeArchive(blob, record, product, bbox, signal) {
       signal.addEventListener('abort', abort, {once: true});
       worker.onerror = () => finish(reject)(Error('Archive decoding failed'));
       worker.onmessage = ({data}) => data.error ? finish(reject)(Error(data.error)) : finish(resolve)(data.rgba);
-      worker.postMessage({bytes, time: record.time, category: product.category, bbox,
-        width: IMAGE_WIDTH, height: IMAGE_HEIGHT, palette: ARCHIVE_PALETTE}, [bytes]);
+      worker.postMessage({bytes, time: record.time, category: product.category, parameter: product.parameter,
+        heightMeters: product.heightMeters, bbox, width: IMAGE_WIDTH, height: IMAGE_HEIGHT,
+        scale: ARCHIVE_SCALES[product.scale]}, [bytes]);
     });
     if (signal.aborted) throw abortError();
     if (!(rgba instanceof ArrayBuffer) || rgba.byteLength !== IMAGE_WIDTH * IMAGE_HEIGHT * 4)
@@ -1474,7 +1520,7 @@ async function decodeArchive(blob, record, product, bbox, signal) {
 }
 
 function serviceUrl(product) {
-  if (!PRODUCTS.some(p => p.id === product)) throw Error('Unknown radar product');
+  if (productInfo(product).levels) throw Error('This product is available from the NOAA archive, not WMS');
   return WMS_ROOT + product + '/ows';
 }
 function wmsUrl(product, params) {
@@ -1558,6 +1604,11 @@ class RadarClient {
   }
   async catalog(product, force = false, end = null) {
     if (end) return this.history(product, end, force);
+    if (productInfo(product).levels) {
+      const times = await this.history(product, new Date().toISOString(), force);
+      if (!times.length) throw Error('No scans are available for this product and height in the past three hours. Try Go to date.');
+      return times;
+    }
     const cached = this.catalogs.get(product);
     const merged = times => mergeRecentTimes(times, this.histories.get(product) || []);
     if (!force && cached && Date.now() - cached.fetched < REFRESH_MS) return merged(cached.times);
@@ -1576,7 +1627,7 @@ class RadarClient {
     if (cached && (!force && (day < utcDay(Date.now()) || Date.now() - cached.fetched < REFRESH_MS))) return cached.records;
     if (this.dayPending.has(cacheKey)) return this.dayPending.get(cacheKey);
     const pending = (async () => {
-      const prefix = `CONUS/${PRODUCTS.find(p => p.id === product).archive}/${day.replaceAll('-', '')}/`;
+      const prefix = `CONUS/${productInfo(product).archive}/${day.replaceAll('-', '')}/`;
       const records = []; let token = null;
       for (let page = 0; page < 4; page++) {
         const params = new URLSearchParams({'list-type': '2', prefix, 'max-keys': '1000'});
@@ -1622,7 +1673,8 @@ class RadarClient {
     this.pending.clear();
   }
   async frame(product, time, bbox) {
-    const url = mapUrl(product, time, bbox);
+    const info = productInfo(product);
+    const url = info.levels ? product + '|' + time + '|' + bbox.map(n => n.toFixed(3)).join(',') : mapUrl(product, time, bbox);
     if (this.frames.has(url)) {
       const cached = this.frames.get(url);
       this.frames.delete(url); this.frames.set(url, cached);
@@ -1639,12 +1691,13 @@ class RadarClient {
         const record = this.archiveObjects.get(product + '|' + time);
         const wms = this.catalogs.get(product)?.times;
         const recent = wms?.includes(time) && Date.parse(time) >= Date.parse(wms.at(-1)) - 105 * 60000;
+        if (info.levels && !record) throw Error('The selected scan is unavailable for this product and height. Try another time.');
         if (record && !recent) {
           source = 'archive';
           const compressed = await this.read(ARCHIVE_ROOT + record.key, 'blob', controller);
           const decode = this.decodeTail.catch(() => {}).then(() => {
             if (epoch !== this.epoch) throw abortError();
-            return decodeArchive(compressed, record, PRODUCTS.find(p => p.id === product), bbox, controller.signal);
+            return decodeArchive(compressed, record, info, bbox, controller.signal);
           });
           this.decodeTail = decode; blob = await decode;
         } else blob = await this.read(url, 'blob', controller);
@@ -1690,12 +1743,15 @@ function boundedSetting(key, fallback, min, max) {
 }
 const S = {
   product: setting('product', PRODUCTS[0].id), lat: boundedSetting('lat', 40.55, -80, 80),
+  height: setting('height', '03.00'),
   lon: boundedSetting('lon', -104.68, -180, 180), zoom: Math.round(boundedSetting('zoom', 7, 3, 12)),
   basemap: setting('basemap', 'dark'), mode: 'live', times: [], selected: null,
   loop: [], timer: null, revision: 0, updating: null,
   windowEnd: null, playEnd: null, frameSource: 'wms', historyLoading: false,
 };
-if (!PRODUCTS.some(p => p.id === S.product)) S.product = PRODUCTS[0].id;
+if (!HEIGHTS.includes(S.height)) S.height = '03.00';
+try { const info = productInfo(S.product); if (info.levels) S.height = info.height; }
+catch { S.product = PRODUCTS[0].id; }
 const client = new RadarClient();
 let leafletMap, radarOverlay, displayedUrl = null, userMarker;
 let scrubTarget = null;
@@ -1709,7 +1765,7 @@ const BASEMAPS = {
 };
 if (!Object.hasOwn(BASEMAPS, S.basemap)) S.basemap = 'dark';
 function saveSettings() {
-  try { for (const key of ['lat', 'lon', 'zoom', 'product', 'basemap']) localStorage.setItem('mrms_wms_' + key, S[key]); }
+  try { for (const key of ['lat', 'lon', 'zoom', 'product', 'height', 'basemap']) localStorage.setItem('mrms_wms_' + key, S[key]); }
   catch { /* The page also works when browser storage is disabled. */ }
 }
 function baseLayer() {
@@ -1809,19 +1865,42 @@ function renderTime() {
 }
 function fetchLegend() {
   const image = $('legendBar');
-  const key = S.product + '|' + S.frameSource;
+  const info = productInfo(S.product), source = info.levels ? 'archive' : S.frameSource;
+  const key = S.product + '|' + source;
   if (image.dataset.source === key) return;
   image.dataset.source = key;
   $('colorbarPanel').classList.add('hidden');
   image.onload = () => $('colorbarPanel').classList.remove('hidden');
   image.onerror = () => $('colorbarPanel').classList.add('hidden');
-  if (S.frameSource === 'archive') {
-    const bars = ARCHIVE_PALETTE.map((rgb, i) => `<rect x="${i * 500 / 22}" y="0" width="${500 / 22 + 0.1}" height="14" fill="rgb(${rgb})"/>`).join('');
-    const labels = [-30,-20,-10,0,10,20,30,40,50,60,70].map(value =>
-      `<text x="${(value + 35) / 110 * 500}" y="27" text-anchor="middle" fill="white" font-size="10">${value}</text>`).join('');
-    image.src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="500" height="30">${bars}${labels}</svg>`);
+  if (source === 'archive') {
+    const scale = ARCHIVE_SCALES[info.scale], count = scale.colors.length;
+    const bars = scale.colors.map((rgb, i) => `<rect x="${i * 500 / count}" y="15" width="${500 / count + 0.1}" height="14" fill="rgb(${rgb})"/>`).join('');
+    const labels = scale.ticks.map(i => `<text x="${i * 500 / count}" y="42" text-anchor="${i === 0 ? 'start' : i === count ? 'end' : 'middle'}" fill="white" font-size="10">${info.scale === 'rhohv' ? scale.bounds[i].toFixed(2) : scale.bounds[i]}</text>`).join('');
+    image.src = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="500" height="45"><text x="250" y="10" text-anchor="middle" fill="white" font-size="10">${info.short || 'Reflectivity'} · ${scale.units}</text>${bars}${labels}</svg>`);
   } else image.src = wmsUrl(S.product, {version: '1.1.1', request: 'GetLegendGraphic', format: 'image/png', layer: S.product});
-  image.alt = PRODUCTS.find(p => p.id === S.product).name + ' color scale in dBZ';
+  image.alt = info.name + ' color scale · ' + ARCHIVE_SCALES[info.scale].units;
+}
+function renderProduct() {
+  const info = productInfo(S.product);
+  $('productSelect').value = info.family || info.id;
+  $('heightSelect').value = S.height;
+  $('heightControls').hidden = !info.levels;
+  $('productHelp').textContent = info.levels
+    ? '5-minute national mosaic. Height is above sea level; choose a level above local terrain.'
+    : 'Contiguous U.S. radar, directly from NOAA.';
+  $('productBadge').textContent = info.levels ? info.short + ' · ' + Number(info.height) + ' km MSL' : info.name;
+  $('productBadge').title = info.name + (info.levels ? ' · ' + Number(info.height) + ' km above mean sea level' : '');
+}
+function changeProduct() {
+  const family = PRODUCTS.find(p => p.id === $('productSelect').value);
+  if (!family || !HEIGHTS.includes($('heightSelect').value)) return;
+  const requestedTime = S.mode === 'paused' ? S.selected : null;
+  S.height = $('heightSelect').value;
+  S.product = family.levels ? family.id + '_' + S.height : family.id;
+  S.times = []; S.selected = null; S.playEnd = null; S.loop = []; scrubTarget = null;
+  S.mode = S.windowEnd || requestedTime ? 'paused' : 'live'; S.frameSource = family.levels ? 'archive' : 'wms';
+  $('dateStatus').textContent = '';
+  renderProduct(); fetchLegend(); viewChanged(requestedTime);
 }
 function stopWork() {
   ++S.revision; client.cancelFrames();
@@ -1855,12 +1934,13 @@ async function fetchImage(force = false, requestedTime = null) {
   try {
     let times = await client.catalog(product, force, S.windowEnd);
     if (revision !== S.revision) return;
+    if (!times.length) throw Error('No scans are available for this product and height in the selected three-hour window.');
     if (requestedTime && !times.includes(requestedTime)) {
       const older = await client.history(product, S.windowEnd || new Date().toISOString());
       if (revision !== S.revision) return;
       times = historyTimes([...times, ...older], windowEndMs());
       const target = Date.parse(requestedTime), actual = nearestScan(times, target);
-      if (!actual || Math.abs(Date.parse(actual) - target) > 180000)
+      if (!actual || Math.abs(Date.parse(actual) - target) > scanTolerance(product))
         throw Error('No scan is available near the selected time. Try another time or Go to date.');
       requestedTime = actual;
     }
@@ -1868,7 +1948,7 @@ async function fetchImage(force = false, requestedTime = null) {
     let time = S.mode === 'live' ? times.at(-1) : requestedTime || S.selected || times.at(-1);
     if (!times.includes(time)) {
       const actual = nearestScan(times, Date.parse(time));
-      if (!actual || Math.abs(Date.parse(actual) - Date.parse(time)) > 180000)
+      if (!actual || Math.abs(Date.parse(actual) - Date.parse(time)) > scanTolerance(product))
         throw Error('This scan is outside the current three-hour window. Use Go to date to reopen it.');
       time = actual;
     }
@@ -1878,7 +1958,7 @@ async function fetchImage(force = false, requestedTime = null) {
     const age = Date.now() - Date.parse(time);
     setStatus(S.mode === 'live' && age > 10 * 60000 ? 'Latest scan is ' + Math.floor(age / 60000) + ' min old' : '', 'warning');
     if (S.windowEnd) $('dateStatus').textContent = 'Showing ' + time.slice(0, 10) + ' ' + time.slice(11, 19) + ' UTC (nearest prior scan).';
-    if (!S.windowEnd) extendHistory(revision, product);
+    if (!S.windowEnd && !productInfo(product).levels) extendHistory(revision, product);
     return true;
   } catch (error) {
     if (revision === S.revision) {
@@ -2023,12 +2103,12 @@ function toggleLivePause() {
     $('mapError').classList.remove('show'); renderTime(); loadLoop();
   }
 }
-function viewChanged() {
+function viewChanged(requestedTime = null) {
   const wasPlaying = S.mode === 'playing';
   stopWork(); clearOverlay(); syncMap(); saveSettings();
   setStatus('Loading radar…', 'loading');
   if (wasPlaying) { S.loop = []; loadLoop(); }
-  else fetchImage();
+  else fetchImage(false, requestedTime);
 }
 function changeZoom(delta) {
   const zoom = Math.max(3, Math.min(12, S.zoom + delta));
@@ -2119,12 +2199,10 @@ async function init() {
     doubleClickZoom: false, boxZoom: false, keyboard: false});
   baseLayer().addTo(leafletMap); scaleMap();
   $('productSelect').innerHTML = PRODUCTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  $('productSelect').value = S.product;
-  const badge = () => { $('productBadge').textContent = PRODUCTS.find(p => p.id === S.product).name; };
-  $('productSelect').onchange = () => {
-    S.product = $('productSelect').value; S.times = []; S.selected = null; scrubTarget = null;
-    S.mode = S.windowEnd ? 'paused' : 'live'; badge(); fetchLegend(); viewChanged();
-  };
+  $('heightSelect').innerHTML = HEIGHTS.map(height => `<option value="${height}">${Number(height)} km MSL</option>`).join('');
+  $('productSelect').onchange = changeProduct;
+  $('heightSelect').onchange = changeProduct;
+  renderProduct();
   $('baseMapSelect').value = S.basemap;
   $('baseMapSelect').onchange = () => {
     leafletMap.removeLayer(BASEMAPS[S.basemap]); S.basemap = $('baseMapSelect').value;
@@ -2157,7 +2235,7 @@ async function init() {
     if (S.mode === 'playing' && !S.windowEnd && !S.playEnd) loadLoop(true);
   }, REFRESH_MS);
   $('dateForm').onsubmit = event => { event.preventDefault(); goToDate(); };
-  fillDateFields(); bindGestures(); badge(); fetchLegend(); renderTime();
+  fillDateFields(); bindGestures(); fetchLegend(); renderTime();
   const firstImage = fetchImage();
   locateUser({startup: true});
   await firstImage;

@@ -19,7 +19,7 @@ function png(time = stamp, size = 1000) {
 function harness(network = async () => new Response(png())) {
   const elements = new Map(), timers = new Map(); let timerId = 0;
   function element(id) {
-    if (!elements.has(id)) elements.set(id, {value: 100, src: '', style: {},
+    if (!elements.has(id)) elements.set(id, {value: 100, src: '', style: {}, dataset: {},
       children: [{}, {}, {}], setAttribute() {},
       classList: {add() {}, remove() {}},
     });
@@ -311,4 +311,69 @@ test('hour jumps in a dated window stay relative to that date', async () => {
   assert.equal(await h.run('jumpHours(2)'), true);
   assert.equal(h.context.fetchedTime,'2026-11-01T15:58:39.000Z');
   assert.equal(h.run('S.windowEnd'),'2026-11-01T18:00:00.000Z');
+});
+test('polarimetric selections use NOAA product parameters and all 33 MSL heights', () => {
+  const h=harness();
+  assert.equal(h.run('HEIGHTS.length'),33);
+  const zdr=h.run("productInfo('zdr_00.75')"),rho=h.run("productInfo('rhohv_19.00')");
+  assert.equal(zdr.archive,'MergedZdr_00.75'); assert.equal(zdr.heightMeters,750);
+  assert.equal(zdr.category,9); assert.equal(zdr.parameter,4);
+  assert.equal(rho.archive,'MergedRhoHV_19.00'); assert.equal(rho.heightMeters,19000);
+  assert.equal(rho.category,9); assert.equal(rho.parameter,3);
+  for(const invalid of ['zdr','zdr_00.00','rhohv_20.00','zdr_3.00','zdr_03.25','missing_03.00'])
+    assert.throws(()=>h.run(`productInfo('${invalid}')`),/Unknown radar product or height/);
+  assert.throws(()=>h.run("mapUrl('zdr_03.00','2026-11-02T18:25:41Z',[1,2,3,4])"),/not WMS/);
+});
+test('live polarimetric catalogs use the public three-hour archive and report empty heights', async () => {
+  const h=harness();h.context.Date=class extends Date {static now(){return Date.parse('2026-11-02T18:30:00Z');}};
+  h.run(`client.history=async(product,end,force)=>{window.catalogQuery={product,end,force};return ['${stamp}'];};`);
+  assert.deepEqual([...await h.run("client.catalog('rhohv_03.00',true)")],[stamp]);
+  assert.equal(h.context.catalogQuery.product,'rhohv_03.00');assert.equal(h.context.catalogQuery.force,true);
+  h.run('client.history=async()=>[]');
+  await assert.rejects(h.run("client.catalog('zdr_00.50')"),/No scans.*product and height/);
+});
+test('polarimetric frame downloads and cache entries stay isolated by variable and height', async () => {
+  const calls=[],h=harness(async url=>{calls.push(url);return new Response(png());});
+  h.run(`decodeArchive=async(blob,record,info)=>{window.decodedInfo=info;return blob;};`);
+  for(const selection of ['zdr_03.00','zdr_04.00','rhohv_03.00']) {
+    h.run(`client.archiveObjects.set('${selection}|${stamp}',{time:'${stamp}',key:'${selection}.grib2.gz'})`);
+    const frame=()=>h.run(`client.frame('${selection}','${stamp}',${JSON.stringify(bbox)})`);
+    assert.equal((await frame()).source,'archive');assert.equal((await frame()).cached,true);
+    assert.equal(h.context.decodedInfo.id,selection);
+  }
+  assert.deepEqual(calls,['zdr_03.00','zdr_04.00','rhohv_03.00'].map(id=>'https://noaa-mrms-pds.s3.amazonaws.com/'+id+'.grib2.gz'));
+  await assert.rejects(h.run(`client.frame('rhohv_04.00','${stamp}',${JSON.stringify(bbox)})`),/unavailable.*product and height/);
+  assert.equal(calls.length,3);assert.equal(h.run('client.frames.size'),3);
+});
+test('five-minute dual-pol scans snap to a real prior observation without accepting a long gap', async () => {
+  for(const [target,success] of [['2026-11-02T18:29:59.000Z',true],['2026-11-02T18:33:00.000Z',false]]) {
+    const h=harness();h.context.Date=class extends Date {static now(){return Date.parse('2026-11-02T18:35:00Z');}};
+    h.run(`S.product='zdr_03.00'; S.mode='paused'; radarOverlay={};
+      client.catalog=client.history=async()=>['${stamp}'];
+      client.frame=async(product,time)=>{window.polarScan=time;return {time};};
+      displayFrame=frame=>{S.selected=frame.time;renderTime();};`);
+    assert.equal(await h.run(`fetchImage(false,'${target}')`),success);
+    assert.equal(h.context.polarScan,success?stamp:undefined);
+  }
+});
+test('product changes expose MSL height, use the correct legend units, and preserve a historical date', () => {
+  const h=harness();
+  h.run("viewChanged=()=>{};S.windowEnd='2026-11-01T18:00:00.000Z'");
+  h.element('productSelect').value='zdr';h.element('heightSelect').value='03.00';h.run('changeProduct()');
+  assert.equal(h.run('S.product'),'zdr_03.00');assert.equal(h.run('S.windowEnd'),'2026-11-01T18:00:00.000Z');
+  assert.equal(h.element('heightControls').hidden,false);assert.equal(h.element('productBadge').textContent,'ZDR · 3 km MSL');
+  assert.match(h.element('legendBar').alt,/dB$/);assert.doesNotMatch(h.element('legendBar').alt,/dBZ/);
+  h.element('productSelect').value='rhohv';h.element('heightSelect').value='04.00';h.run('changeProduct()');
+  assert.equal(h.run('S.product'),'rhohv_04.00');assert.match(h.element('legendBar').alt,/unitless/);
+  assert.match(decodeURIComponent(h.element('legendBar').src),/1\.00/);
+  h.element('productSelect').value=product;h.run('changeProduct()');
+  assert.equal(h.element('heightControls').hidden,true);assert.equal(h.run('S.height'),'04.00');
+  assert.equal(h.run('S.product'),product);
+});
+test('switching variables or heights preserves the paused observation for comparison', () => {
+  const h=harness();h.run(`viewChanged=time=>{window.comparisonTime=time;}; S.mode='paused'; S.selected='${stamp}';`);
+  h.element('productSelect').value='zdr';h.element('heightSelect').value='03.00';h.run('changeProduct()');
+  assert.equal(h.context.comparisonTime,stamp);assert.equal(h.run('S.mode'),'paused');
+  h.run(`S.selected='${stamp}'`);h.element('heightSelect').value='04.00';h.run('changeProduct()');
+  assert.equal(h.context.comparisonTime,stamp);assert.equal(h.run('S.product'),'zdr_04.00');
 });

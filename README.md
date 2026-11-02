@@ -7,13 +7,15 @@ plus the original Python CLI and web server.
 
 **[standalone/noaa_wms/index.html](standalone/noaa_wms/index.html) is the latest
 standalone version.** It includes the compact controls, red location dot,
-three-hour history slider, and UTC date/time picker for earlier days.
+three-hour history slider, UTC date/time picker for earlier days, and ZDR/ρHV
+mosaics with a selectable height.
 
 It is a single HTML file with Leaflet and the default basemap embedded. No
 Python server, Google authorization, proxy, API key, or build step is required.
-Live base/composite reflectivity comes directly from NOAA WMS; older scans come
-from NOAA's public archive and are decoded in the browser. Coverage is the
-contiguous United States.
+Live base/composite reflectivity comes directly from NOAA WMS. Older reflectivity
+and all ZDR/ρHV scans come from NOAA's public archive and are decoded in the
+browser. Dual-pol products offer 33 heights from 0.5–19 km above sea level.
+Coverage is the contiguous United States.
 
 1. **[Download the latest HTML](https://raw.githubusercontent.com/JValdivia23/mrms-radar/main/standalone/noaa_wms/index.html)**
    and save it as `index.html` (use Save link as if the browser displays its source).
@@ -131,7 +133,7 @@ Open **`http://127.0.0.1:8000`** in your browser to view the interactive map and
 
 | Version | Status and purpose |
 | --- | --- |
-| **[noaa_wms](standalone/noaa_wms/README.md)** | **Latest standalone version.** One self-contained HTML file; direct NOAA access, compact controls, three-hour history, and past-date selection. |
+| **[noaa_wms](standalone/noaa_wms/README.md)** | **Latest standalone version.** One self-contained HTML file; direct NOAA access, compact controls, three-hour history, past-date selection, and ZDR/ρHV with height selection. |
 | [pure_js](standalone/pure_js/README.md) | Earlier Google Apps Script proxy experiment, retaining the broader MRMS product catalog. Requires a configured, authorized proxy. |
 | [wasm_console](standalone/wasm_console/index.html) | Earlier WebAssembly console experiment. |
 | [static](static/index.html) | Original frontend used by the Python web server. |

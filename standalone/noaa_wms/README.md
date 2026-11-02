@@ -1,7 +1,8 @@
 # Latest standalone version — direct NOAA radar
 
 This is the project's **latest standalone version**, including compact playback
-controls, the red location marker, a three-hour timeline, and past-date selection.
+controls, the red location marker, a three-hour timeline, past-date selection,
+and ZDR/ρHV mosaics with selectable heights.
 The earlier `pure_js` and `wasm_console` folders retain previous experiments.
 
 Open `index.html` in a browser. It is a single runnable HTML file: Leaflet
@@ -24,10 +25,17 @@ The page requests PNGs directly from NOAA's public GeoServer WMS:
 - [Base reflectivity](https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?service=WMS&version=1.3.0&request=GetCapabilities)
 - [Composite reflectivity](https://opengeo.ncep.noaa.gov/geoserver/conus/conus_cref_qcd/ows?service=WMS&version=1.3.0&request=GetCapabilities)
 
-Both layers cover the contiguous U.S. The product selector deliberately contains
-only these two supported products; altitude selection and the broader MRMS
-Operational Product Viewer catalog remain in `pure_js`.
-See the [NOAA service directory](https://opengeo.ncep.noaa.gov/geoserver/www/index.html).
+Both layers cover the contiguous U.S. These remain the fast default image path.
+The product menu also offers **ZDR (differential reflectivity)** and **ρHV
+(correlation coefficient)** from NOAA's public MRMS archive. Both update every
+five minutes and offer 33 constant-altitude levels from 0.5–19 km **above mean
+sea level (MSL)**, not above ground. A height selector appears only for these
+products, defaults to 3 km MSL, and remembers the last choice. Low levels can be
+below local terrain and correctly show no data. The compact header includes
+the selected height. Other products in the broader MRMS catalog remain in
+`pure_js`.
+See the [MRMS product definitions](https://www.nssl.noaa.gov/projects/mrms/operational/tables.php)
+and [NOAA service directory](https://opengeo.ncep.noaa.gov/geoserver/www/index.html).
 
 `GetCapabilities` supplies recent observation times, including their actual
 seconds. The live image loads immediately from this fast path; older time
@@ -42,15 +50,21 @@ No fetch interception, local JSON API, proxy, or base64 image transport is used.
 
 ### Three-hour history and past dates
 
-The WMS feed currently exposes roughly two hours. For older scans the page uses
-the same two quality-controlled MRMS products from the public
-[NOAA archive](https://registry.opendata.aws/noaa-mrms-pds/), without AWS
-credentials:
+The WMS feed currently exposes roughly two hours. The public
+[NOAA archive](https://registry.opendata.aws/noaa-mrms-pds/) supplies older
+reflectivity scans and all ZDR/ρHV scans, without AWS credentials:
 
 ```text
 CONUS/MergedBaseReflectivityQC_00.50/YYYYMMDD/
 CONUS/MergedReflectivityQCComposite_00.50/YYYYMMDD/
+CONUS/MergedZdr_HH.HH/YYYYMMDD/
+CONUS/MergedRhoHV_HH.HH/YYYYMMDD/
 ```
+
+`HH.HH` is a supported height in km MSL, such as `03.00`. ZDR and ρHV use this
+credential-free archive path for both live and historical scans; they are not
+layers on the reflectivity WMS. Their first frame requires a grid download and
+browser decoding, so it can take longer than a rendered WMS PNG.
 
 The archive's XML listing provides actual object timestamps. Requests spanning
 UTC midnight read both dates, and recent GIS/archive observations within the
@@ -58,18 +72,23 @@ same minute are deduplicated with preference for the fast WMS image. Missing
 observations are never invented. Availability depends on NOAA's archive; an
 empty date reports that no scans are available.
 
-Archive files are gzip-compressed GRIB2 with PNG-packed unsigned 16-bit values.
+Archive files are gzip-compressed GRIB2 with PNG-packed unsigned 16-bit grayscale
+or 24-bit RGB integer values. All three RGB bytes must be retained to recover
+ρHV correctly; the RGB channels are packed numbers, not display colors.
 A source-specific decoder validates the product, observation timestamp, grid,
-scales, PNG checksums, and supported profile. A disposable Web Worker inflates
+height, scales, PNG checksums, and supported profile. A disposable Web Worker inflates
 and filters the source, then samples only the requested viewport onto the same
 EPSG:3857 rectangle used by the map. Archive decoding is serialized, and cancelled
-views terminate their worker. Compressed and inflated inputs are limited to
-64 MiB; only the small viewport becomes an RGBA image. The decoder supports the
+views terminate their worker. Compressed inputs and inflated GRIB messages are
+limited to 64 MiB. The bounded PNG raster is at most about 71 MiB for RGB;
+only the small viewport becomes an RGBA image. The decoder supports the
 7000×3500 CONUS grid and GRIB packing template 5.41, not arbitrary GRIB formats.
 
-Archived images use the NOAA/NSSL viewer's published 5 dBZ reflectivity bins
-from −35 to 75 dBZ, with a matching embedded legend; the live WMS image keeps
-its provider legend. Missing/no-coverage values are transparent. This path needs
+Archived reflectivity uses the NOAA/NSSL viewer's published 5 dBZ bins from −35
+to 75 dBZ. ZDR and ρHV use that viewer's respective nonuniform bins and colors,
+with matching embedded legends in dB and unitless correlation. Negative ZDR
+values and fractional correlation values are preserved. The live WMS image
+keeps its provider legend. Missing/no-coverage values are transparent. This path needs
 a modern browser supporting Web Workers and `DecompressionStream` (gzip/deflate).
 It remains a single HTML file with no backend or extra downloads of decoder code.
 
@@ -89,6 +108,10 @@ It remains a single HTML file with no backend or extra downloads of decoder code
   observation actually displayed. Arrow buttons and the time slider select
   individual real scans within the three-hour window. Historical playback stays
   on its selected date rather than refreshing back to the present.
+- **Products and heights** are selected in the menu. Switching either while
+  paused requests the nearest prior scan to the displayed observation, retaining
+  the historical window for comparisons. Live mode continues to show the latest
+  scan. Cache entries and archive listings are isolated by variable and height.
 - **NOW** returns to the latest advertised scan. Live view and playing loops
   check for new scans every 30 seconds while the page is visible. Published
   cadence and retained history are controlled by NOAA. The same Now button
@@ -101,7 +124,8 @@ It remains a single HTML file with no backend or extra downloads of decoder code
   also support keyboard activation. Both dragging and hour jumps pause live
   updates and explicitly load the requested time, even if background archive
   discovery is still running. Gaps snap to a real nearby scan; if no scan
-  is available within three minutes, an explicit error preserves the current
+  is available within three minutes for reflectivity or six minutes for the
+  five-minute dual-pol products, an explicit error preserves the current
   image. The displayed image timestamp changes only once a new image has loaded.
 - **Go to date** in the menu accepts a UTC date and time, plus previous/next-day
   buttons. It opens the nearest available prior observation and a three-hour
@@ -142,14 +166,18 @@ These cover exact timestamps and projection, transparent images, response
 validation, request sharing, cache budgets, concurrency, deadlines, cancellation,
 stale replies, three-hour boundaries, UTC dates, history navigation, archive/WMS
 routing, and 90 scheduled loop refreshes across UTC midnight. Synthetic archive
-tests cover 16-bit values, all five PNG row filters, geographic sampling,
-transparency, and corrupt/mismatched data. They use
+tests cover 16-bit grayscale and 24-bit RGB samples, all five PNG row filters,
+negative ZDR, fractional ρHV, geographic sampling, transparency, and
+corrupt/mismatched data including incorrect variables or heights. They use
 mocked network/image decoding; real decoding and live NOAA access require a
 browser check.
 
 During implementation, both real archived products were also compared pixel for
 pixel against an independent Pillow/NumPy decode and projection; the viewport
 RGBA hashes matched. Source data and generated rasters stay outside git.
+Real ZDR and ρHV scans at both 0.5 and 3 km MSL were subsequently compared against
+independent Pillow/NumPy decoding and projection using NOAA's published legends;
+all viewport pixels matched exactly.
 
 For an optional local HTTP preview:
 
